@@ -126,6 +126,46 @@ const SettingsPage = () => {
       .catch((err) => alert(err.message));
   };
 
+  const handleConfirmPayment = (paymentId) => {
+    authFetch(`${API_BASE}/billing/confirm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ payment_id: paymentId }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to confirm payment");
+        const existingUser = JSON.parse(localStorage.getItem("user") || "{}");
+        localStorage.setItem("user", JSON.stringify({ ...existingUser, account_type: data.account_type }));
+        alert(`Payment confirmed: ${data.message}`);
+        loadBilling();
+      })
+      .catch((err) => alert(err.message));
+  };
+
+  const handleFailPayment = (paymentId) => {
+    authFetch(`${API_BASE}/billing/fail`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ payment_id: paymentId }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to mark payment as failed");
+        const existingUser = JSON.parse(localStorage.getItem("user") || "{}");
+        localStorage.setItem("user", JSON.stringify({ ...existingUser, account_type: data.account_type }));
+        alert(`Payment updated: ${data.message}`);
+        loadBilling();
+      })
+      .catch((err) => alert(err.message));
+  };
+
   return (
     <div className="settings-container">
       <aside className="settings-sidebar">
@@ -230,15 +270,26 @@ const SettingsPage = () => {
                   <h3>Current Plan</h3>
                   <p><strong>{billing.current_plan.plan.name}</strong></p>
                   <p>{billing.current_plan.plan.description}</p>
+                  <p>Status: {billing.current_plan.status}</p>
                   <p>Price: {billing.current_plan.plan.price_monthly.toLocaleString("vi-VN")} VND / month</p>
                   <p>Playlist limit: {billing.current_plan.plan.max_playlists}</p>
                   <p>Emotion recommendations: {billing.current_plan.plan.emotion_recommendations ? "Enabled" : "Premium only"}</p>
+                  {billing.current_plan.expires_at && <p>Expires at: {billing.current_plan.expires_at}</p>}
                   {billing.current_plan.plan.code !== "free" && (
                     <button type="button" className="primary-button" onClick={handleDowngrade}>
                       Downgrade to Free
                     </button>
                   )}
                 </div>
+
+                {billing.pending_subscription && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <h3>Pending Subscription</h3>
+                    <p><strong>{billing.pending_subscription.plan.name}</strong></p>
+                    <p>Status: {billing.pending_subscription.status}</p>
+                    <p>This plan will be activated only after the pending payment is confirmed.</p>
+                  </div>
+                )}
 
                 <div style={{ marginBottom: "24px" }}>
                   <h3>Available Plans</h3>
@@ -288,6 +339,24 @@ const SettingsPage = () => {
                         <p>Method: {payment.provider}</p>
                         <p>{payment.note}</p>
                         <p>{payment.created_at}</p>
+                        {payment.status === "pending" && (
+                          <div style={{ display: "flex", gap: "12px", marginTop: "10px" }}>
+                            <button
+                              type="button"
+                              className="primary-button"
+                              onClick={() => handleConfirmPayment(payment.id)}
+                            >
+                              Confirm Payment
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleFailPayment(payment.id)}
+                            >
+                              Mark Failed
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}

@@ -9,7 +9,7 @@ from models.base import SessionLocal
 from models.user import User
 from models.plan import Plan
 from schemas.user import UserUpdate
-from schemas.billing import BillingOverview, PlanResponse, SubscriptionSummary, PaymentResponse, SubscribeRequest
+from schemas.billing import BillingOverview, PlanResponse, SubscriptionSummary, PaymentResponse, SubscribeRequest, PaymentActionRequest
 from .auth_routes import get_current_user
 from utils.password import verify_password, hash_password
 from utils.activity import log_activity
@@ -17,7 +17,10 @@ from utils.billing import (
     ensure_user_has_subscription,
     get_subscription_plan,
     ensure_default_plans,
+    get_pending_subscription,
     upgrade_subscription,
+    confirm_payment,
+    fail_payment,
     cancel_subscription,
     list_recent_payments,
 )
@@ -87,6 +90,7 @@ def change_password(payload: PasswordChange, db: Session = Depends(get_db), curr
 def serialize_subscription(db: Session, subscription):
     plan = get_subscription_plan(db, subscription)
     return SubscriptionSummary(
+        id=subscription.id,
         plan=PlanResponse.model_validate(plan),
         status=subscription.status,
         auto_renew=subscription.auto_renew,
@@ -99,6 +103,7 @@ def serialize_subscription(db: Session, subscription):
 def get_billing_overview(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ensure_default_plans(db)
     subscription = ensure_user_has_subscription(db, current_user)
+    pending_subscription = get_pending_subscription(db, current_user.id)
     plan = get_subscription_plan(db, subscription)
     current_user.account_type = plan.code
     db.commit()
@@ -111,36 +116,53 @@ def get_billing_overview(db: Session = Depends(get_db), current_user: User = Dep
         recent_payments=[
             PaymentResponse(
                 id=item.id,
+                subscription_id=item.subscription_id,
+                plan_id=item.plan_id,
                 amount=item.amount,
                 currency=item.currency,
                 provider=item.provider,
                 status=item.status,
                 note=item.note,
                 created_at=item.created_at.isoformat() if item.created_at else None,
+                updated_at=item.updated_at.isoformat() if item.updated_at else None,
             )
             for item in payments
         ],
+        pending_subscription=serialize_subscription(db, pending_subscription) if pending_subscription else None,
     )
 
 
 @router.post("/billing/subscribe")
 def subscribe_plan(payload: SubscribeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     subscription, plan, payment = upgrade_subscription(db, current_user, payload.plan_code, payload.payment_method or "manual")
-    current_user.account_type = plan.code
+    if subscription.status == "active":
+        current_user.account_type = plan.code
+    else:
+        active_subscription = ensure_user_has_subscription(db, current_user)
+        current_user.account_type = get_subscription_plan(db, active_subscription).code
     db.commit()
     log_activity(
         db,
         current_user.id,
-        "subscribe_plan",
+        "request_plan_change" if payment else "subscribe_plan",
         "plan",
         plan.id,
-        f"Subscribed to {plan.name} via {payload.payment_method or 'manual'}",
+        (
+            f"Awaiting payment confirmation for {plan.name} via {payload.payment_method or 'manual'}"
+            if payment else
+            f"Subscribed to {plan.name} via {payload.payment_method or 'manual'}"
+        ),
     )
     return {
-        "message": f"Subscribed to {plan.name}",
+        "message": (
+            f"Payment created for {plan.name}. Confirm payment to activate the subscription."
+            if payment else
+            f"Subscribed to {plan.name}"
+        ),
         "account_type": current_user.account_type,
         "payment_id": payment.id if payment else None,
         "subscription_id": subscription.id,
+        "subscription_status": subscription.status,
     }
 
 
@@ -155,4 +177,41 @@ def downgrade_to_free(db: Session = Depends(get_db), current_user: User = Depend
         "message": "Subscription downgraded to Free",
         "account_type": current_user.account_type,
         "subscription_id": subscription.id,
+    }
+
+
+@router.post("/billing/confirm")
+def confirm_pending_payment(payload: PaymentActionRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        subscription, payment = confirm_payment(db, current_user, payload.payment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    plan = get_subscription_plan(db, subscription)
+    current_user.account_type = plan.code
+    db.commit()
+    log_activity(db, current_user.id, "confirm_payment", "payment", payment.id, f"Confirmed payment for {plan.name}")
+    return {
+        "message": f"Payment confirmed. {plan.name} is now active.",
+        "account_type": current_user.account_type,
+        "payment_status": payment.status,
+        "subscription_status": subscription.status,
+    }
+
+
+@router.post("/billing/fail")
+def fail_pending_payment(payload: PaymentActionRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        payment = fail_payment(db, current_user, payload.payment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    active_subscription = ensure_user_has_subscription(db, current_user)
+    current_user.account_type = get_subscription_plan(db, active_subscription).code
+    db.commit()
+    log_activity(db, current_user.id, "fail_payment", "payment", payment.id, "Marked payment as failed")
+    return {
+        "message": "Payment marked as failed.",
+        "account_type": current_user.account_type,
+        "payment_status": payment.status,
     }

@@ -176,6 +176,12 @@ def get_dashboard_metrics():
         cur.execute("SELECT COUNT(*) FROM public.payments")
         metrics["total_payments"] = cur.fetchone()[0]
 
+        cur.execute("SELECT COUNT(*) FROM public.payments WHERE status = 'pending'")
+        metrics["pending_payments"] = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM public.payments WHERE status = 'failed'")
+        metrics["failed_payments"] = cur.fetchone()[0]
+
         cur.execute("SELECT COALESCE(SUM(amount), 0) FROM public.payments WHERE status = 'paid'")
         metrics["total_revenue"] = cur.fetchone()[0]
 

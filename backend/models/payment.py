@@ -21,4 +21,4 @@ class Payment(Base):
     status = Column(String, nullable=False, default="paid")
     note = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -322,6 +322,8 @@ const AdminCrud = () => {
               <div className="card"><h3>✅ Active Artists</h3><p>{dashboardMetrics.active_artists ?? "..."}</p></div>
               <div className="card"><h3>⛔ Inactive Artists</h3><p>{dashboardMetrics.inactive_artists ?? "..."}</p></div>
               <div className="card"><h3>💳 Payments</h3><p>{dashboardMetrics.total_payments ?? "..."}</p></div>
+              <div className="card"><h3>⏳ Pending Payments</h3><p>{dashboardMetrics.pending_payments ?? "..."}</p></div>
+              <div className="card"><h3>❌ Failed Payments</h3><p>{dashboardMetrics.failed_payments ?? "..."}</p></div>
               <div className="card"><h3>💰 Revenue</h3><p>{dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue ?? "..."}</p></div>
               <div className="card"><h3>🆓 Free Users</h3><p>{dashboardMetrics.free_users ?? "..."}</p></div>
               <div className="card"><h3>⭐ Premium Users</h3><p>{dashboardMetrics.premium_users ?? "..."}</p></div>
