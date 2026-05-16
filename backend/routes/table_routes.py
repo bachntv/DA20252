@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any
 import psycopg2
 import os
@@ -248,15 +248,22 @@ def get_recent_activity_logs():
 
 
 @router.get("/top-songs")
-def get_top_songs():
+def get_top_songs(period: str = Query("all", pattern="^(all|week|month)$")):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("""
+        period_filters = {
+            "all": "",
+            "week": "WHERE lh.played_at >= NOW() - INTERVAL '7 days'",
+            "month": "WHERE lh.played_at >= NOW() - INTERVAL '30 days'",
+        }
+        filter_sql = period_filters.get(period, "")
+        cur.execute(f"""
             SELECT s.track_name, at.name AS artist_name, COUNT(*) AS play_count
             FROM public.listening_history lh
             JOIN public.songs s ON s.track_id = lh.track_id
             JOIN public.artists at ON at.id = s.artist_id
+            {filter_sql}
             GROUP BY s.track_name, at.name
             ORDER BY play_count DESC, s.track_name ASC
             LIMIT 10
@@ -264,27 +271,38 @@ def get_top_songs():
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        return [
+        return {
+            "period": period,
+            "items": [
             {
+                "rank": index + 1,
                 "track_name": row[0],
                 "artist_name": row[1],
                 "play_count": row[2],
             }
-            for row in rows
-        ]
+                for index, row in enumerate(rows)
+            ]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Top songs failed: {str(e)}")
 
 
 @router.get("/top-users")
-def get_top_users():
+def get_top_users(period: str = Query("all", pattern="^(all|week|month)$")):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("""
+        period_filters = {
+            "all": "",
+            "week": "WHERE lh.played_at >= NOW() - INTERVAL '7 days'",
+            "month": "WHERE lh.played_at >= NOW() - INTERVAL '30 days'",
+        }
+        filter_sql = period_filters.get(period, "")
+        cur.execute(f"""
             SELECT u.username, u.account_type, COUNT(*) AS play_count
             FROM public.listening_history lh
             JOIN public.users u ON u.id = lh.user_id
+            {filter_sql}
             GROUP BY u.username, u.account_type
             ORDER BY play_count DESC, u.username ASC
             LIMIT 10
@@ -292,16 +310,127 @@ def get_top_users():
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        return [
+        return {
+            "period": period,
+            "items": [
             {
+                "rank": index + 1,
                 "username": row[0],
                 "account_type": row[1],
                 "play_count": row[2],
             }
-            for row in rows
-        ]
+                for index, row in enumerate(rows)
+            ],
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Top users failed: {str(e)}")
+
+
+@router.get("/payments-report")
+def get_payments_report(status: str = Query("all", pattern="^(all|pending|paid|failed)$")):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        where_clause = ""
+        params = []
+        if status != "all":
+            where_clause = 'WHERE p.status = %s'
+            params.append(status)
+
+        cur.execute(f"""
+            SELECT
+                p.id,
+                u.username,
+                pl.name,
+                p.amount,
+                p.currency,
+                p.provider,
+                p.status,
+                p.note,
+                p.created_at,
+                p.updated_at
+            FROM public.payments p
+            LEFT JOIN public.users u ON u.id = p.user_id
+            LEFT JOIN public.plans pl ON pl.id = p.plan_id
+            {where_clause}
+            ORDER BY p.created_at DESC
+            LIMIT 100
+        """, params)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "status": status,
+            "items": [
+                {
+                    "id": row[0],
+                    "username": row[1],
+                    "plan_name": row[2],
+                    "amount": row[3],
+                    "currency": row[4],
+                    "provider": row[5],
+                    "status": row[6],
+                    "note": row[7],
+                    "created_at": row[8].isoformat() if row[8] else None,
+                    "updated_at": row[9].isoformat() if row[9] else None,
+                }
+                for row in rows
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Payments report failed: {str(e)}")
+
+
+@router.get("/revenue-summary")
+def get_revenue_summary():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM public.payments
+            WHERE status = 'paid'
+        """)
+        all_revenue = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM public.payments
+            WHERE status = 'paid' AND created_at >= NOW() - INTERVAL '7 days'
+        """)
+        week_revenue = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM public.payments
+            WHERE status = 'paid' AND created_at >= NOW() - INTERVAL '30 days'
+        """)
+        month_revenue = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT status, COUNT(*)
+            FROM public.payments
+            GROUP BY status
+        """)
+        status_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        status_map = {"pending": 0, "paid": 0, "failed": 0}
+        for row in status_rows:
+            if row[0] in status_map:
+                status_map[row[0]] = row[1]
+
+        return {
+            "revenue": {
+                "all": all_revenue,
+                "week": week_revenue,
+                "month": month_revenue,
+            },
+            "payments_by_status": status_map,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Revenue summary failed: {str(e)}")
 
 
 

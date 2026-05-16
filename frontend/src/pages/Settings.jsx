@@ -166,6 +166,24 @@ const SettingsPage = () => {
       .catch((err) => alert(err.message));
   };
 
+  const handleRenewSubscription = () => {
+    authFetch(`${API_BASE}/billing/renew`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to renew subscription");
+        const existingUser = JSON.parse(localStorage.getItem("user") || "{}");
+        localStorage.setItem("user", JSON.stringify({ ...existingUser, account_type: data.account_type }));
+        alert(`Renewed: ${data.message}`);
+        loadBilling();
+      })
+      .catch((err) => alert(err.message));
+  };
+
   return (
     <div className="settings-container">
       <aside className="settings-sidebar">
@@ -271,14 +289,28 @@ const SettingsPage = () => {
                   <p><strong>{billing.current_plan.plan.name}</strong></p>
                   <p>{billing.current_plan.plan.description}</p>
                   <p>Status: {billing.current_plan.status}</p>
+                  <p>Auto-renew: {billing.current_plan.auto_renew ? "Enabled" : "Disabled"}</p>
                   <p>Price: {billing.current_plan.plan.price_monthly.toLocaleString("vi-VN")} VND / month</p>
                   <p>Playlist limit: {billing.current_plan.plan.max_playlists}</p>
                   <p>Emotion recommendations: {billing.current_plan.plan.emotion_recommendations ? "Enabled" : "Premium only"}</p>
                   {billing.current_plan.expires_at && <p>Expires at: {billing.current_plan.expires_at}</p>}
+                  {billing.current_plan.expiring_soon && (
+                    <div className="billing-warning">
+                      Your subscription is expiring soon.
+                      {typeof billing.current_plan.days_remaining === "number" && (
+                        <> {billing.current_plan.days_remaining} day(s) remaining.</>
+                      )}
+                    </div>
+                  )}
                   {billing.current_plan.plan.code !== "free" && (
-                    <button type="button" className="primary-button" onClick={handleDowngrade}>
-                      Downgrade to Free
-                    </button>
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                      <button type="button" className="primary-button" onClick={handleRenewSubscription}>
+                        Renew Premium
+                      </button>
+                      <button type="button" className="secondary-button" onClick={handleDowngrade}>
+                        Downgrade to Free
+                      </button>
+                    </div>
                   )}
                 </div>
 

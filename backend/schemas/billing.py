@@ -23,6 +23,8 @@ class SubscriptionSummary(BaseModel):
     auto_renew: bool
     started_at: Optional[str]
     expires_at: Optional[str]
+    days_remaining: Optional[int] = None
+    expiring_soon: bool = False
 
 
 class PaymentResponse(BaseModel):

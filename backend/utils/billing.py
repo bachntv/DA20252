@@ -62,10 +62,52 @@ def get_pending_subscription(db: Session, user_id: str) -> Subscription | None:
     )
 
 
+def create_paid_payment(
+    db: Session,
+    *,
+    user_id: str,
+    subscription_id: str,
+    plan_id: str,
+    amount: int,
+    provider: str,
+    note: str,
+):
+    payment = Payment(
+        user_id=user_id,
+        subscription_id=subscription_id,
+        plan_id=plan_id,
+        amount=amount,
+        currency="VND",
+        provider=provider,
+        status="paid",
+        note=note,
+    )
+    db.add(payment)
+    return payment
+
+
 def ensure_user_has_subscription(db: Session, user: User) -> Subscription:
     ensure_default_plans(db)
     current = get_active_subscription(db, user.id)
     if current and current.expires_at and current.expires_at <= datetime.utcnow():
+        plan = get_subscription_plan(db, current)
+        if current.auto_renew and plan.price_monthly > 0:
+            base_time = current.expires_at if current.expires_at > datetime.utcnow() else datetime.utcnow()
+            current.expires_at = base_time + timedelta(days=30)
+            current.updated_at = datetime.utcnow()
+            create_paid_payment(
+                db,
+                user_id=user.id,
+                subscription_id=current.id,
+                plan_id=plan.id,
+                amount=plan.price_monthly,
+                provider="auto-renew",
+                note=f"Auto-renewed {plan.name} for 30 more days",
+            )
+            db.commit()
+            db.refresh(current)
+            return current
+
         current.status = "expired"
         current.auto_renew = False
         current.updated_at = datetime.utcnow()
@@ -269,3 +311,30 @@ def list_recent_payments(db: Session, user_id: str, limit: int = 10):
         .limit(limit)
         .all()
     )
+
+
+def renew_subscription(db: Session, user: User, payment_method: str = "manual"):
+    current = ensure_user_has_subscription(db, user)
+    plan = get_subscription_plan(db, current)
+    if plan.code == "free":
+        raise ValueError("Only Premium subscriptions can be renewed")
+    if current.status != "active":
+        raise ValueError("Only active subscriptions can be renewed")
+
+    base_time = current.expires_at if current.expires_at and current.expires_at > datetime.utcnow() else datetime.utcnow()
+    current.expires_at = base_time + timedelta(days=30)
+    current.updated_at = datetime.utcnow()
+
+    payment = create_paid_payment(
+        db,
+        user_id=user.id,
+        subscription_id=current.id,
+        plan_id=plan.id,
+        amount=plan.price_monthly,
+        provider=payment_method or "manual",
+        note=f"Manual renewal for {plan.name}",
+    )
+    db.commit()
+    db.refresh(current)
+    db.refresh(payment)
+    return current, payment

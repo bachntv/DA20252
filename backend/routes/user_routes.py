@@ -23,6 +23,7 @@ from utils.billing import (
     fail_payment,
     cancel_subscription,
     list_recent_payments,
+    renew_subscription,
 )
 
 router = APIRouter()
@@ -89,6 +90,12 @@ def change_password(payload: PasswordChange, db: Session = Depends(get_db), curr
 
 def serialize_subscription(db: Session, subscription):
     plan = get_subscription_plan(db, subscription)
+    days_remaining = None
+    expiring_soon = False
+    if subscription.expires_at:
+        delta_days = (subscription.expires_at - datetime.utcnow()).days
+        days_remaining = max(delta_days, 0)
+        expiring_soon = days_remaining <= 7
     return SubscriptionSummary(
         id=subscription.id,
         plan=PlanResponse.model_validate(plan),
@@ -96,6 +103,8 @@ def serialize_subscription(db: Session, subscription):
         auto_renew=subscription.auto_renew,
         started_at=subscription.started_at.isoformat() if subscription.started_at else None,
         expires_at=subscription.expires_at.isoformat() if subscription.expires_at else None,
+        days_remaining=days_remaining,
+        expiring_soon=expiring_soon,
     )
 
 
@@ -214,4 +223,23 @@ def fail_pending_payment(payload: PaymentActionRequest, db: Session = Depends(ge
         "message": "Payment marked as failed.",
         "account_type": current_user.account_type,
         "payment_status": payment.status,
+    }
+
+
+@router.post("/billing/renew")
+def renew_current_subscription(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        subscription, payment = renew_subscription(db, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    plan = get_subscription_plan(db, subscription)
+    current_user.account_type = plan.code
+    db.commit()
+    log_activity(db, current_user.id, "renew_subscription", "payment", payment.id, f"Renewed {plan.name} for 30 days")
+    return {
+        "message": f"{plan.name} has been renewed for 30 more days.",
+        "account_type": current_user.account_type,
+        "payment_status": payment.status,
+        "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
     }

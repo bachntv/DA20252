@@ -167,3 +167,13 @@
   background: var(--bg-hover);
   border-color: var(--accent-primary);
 }
+
+.billing-warning {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 193, 7, 0.14);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  color: #f4d35e;
+  font-weight: 600;
+}

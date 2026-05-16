@@ -6,10 +6,20 @@ import { jwtDecode } from "jwt-decode";
 import { authFetch } from "../utils/authFetch";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
+const OVERVIEW_KEY = "__overview__";
+const TOP_SONGS_KEY = "__top_songs__";
+const TOP_USERS_KEY = "__top_users__";
+const PAYMENTS_KEY = "__payments__";
+
+const PERIOD_LABELS = {
+  all: "All Time",
+  week: "Last 7 Days",
+  month: "Last 30 Days",
+};
 
 const AdminCrud = () => {
   const [tables, setTables] = useState([]);
-  const [selectedTable, setSelectedTable] = useState("__overview__");
+  const [selectedTable, setSelectedTable] = useState(OVERVIEW_KEY);
   const [schema, setSchema] = useState([]);
   const [data, setData] = useState([]);
   const [formData, setFormData] = useState({});
@@ -20,6 +30,14 @@ const AdminCrud = () => {
   const [activityLogs, setActivityLogs] = useState([]);
   const [topSongs, setTopSongs] = useState([]);
   const [topUsers, setTopUsers] = useState([]);
+  const [topSongsPeriod, setTopSongsPeriod] = useState("all");
+  const [topUsersPeriod, setTopUsersPeriod] = useState("all");
+  const [paymentsReport, setPaymentsReport] = useState([]);
+  const [paymentsFilter, setPaymentsFilter] = useState("all");
+  const [revenueSummary, setRevenueSummary] = useState({
+    revenue: { all: 0, week: 0, month: 0 },
+    payments_by_status: { pending: 0, paid: 0, failed: 0 },
+  });
   const navigate = useNavigate();
 
   const authHeaders = {
@@ -48,8 +66,71 @@ const AdminCrud = () => {
       });
   };
 
+  const loadTopSongs = (period = topSongsPeriod) => {
+    authFetch(`${API_BASE}/api/database/top-songs?period=${period}`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setTopSongs(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch top songs:", err);
+        setTopSongs([]);
+      });
+  };
+
+  const loadActivityLogs = () => {
+    authFetch(`${API_BASE}/api/database/activity-logs`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then(setActivityLogs)
+      .catch((err) => {
+        console.error("Failed to fetch activity logs:", err);
+        setActivityLogs([]);
+      });
+  };
+
+  const loadTopUsers = () => {
+    authFetch(`${API_BASE}/api/database/top-users?period=${topUsersPeriod}`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setTopUsers(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch top users:", err);
+        setTopUsers([]);
+      });
+  };
+
+  const loadRevenueSummary = () => {
+    authFetch(`${API_BASE}/api/database/revenue-summary`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then(setRevenueSummary)
+      .catch((err) => {
+        console.error("Failed to fetch revenue summary:", err);
+        setRevenueSummary({
+          revenue: { all: 0, week: 0, month: 0 },
+          payments_by_status: { pending: 0, paid: 0, failed: 0 },
+        });
+      });
+  };
+
+  const loadPaymentsReport = (status = paymentsFilter) => {
+    authFetch(`${API_BASE}/api/database/payments-report?status=${status}`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setPaymentsReport(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch payments report:", err);
+        setPaymentsReport([]);
+      });
+  };
+
   const loadTableData = () => {
-    if (!selectedTable || selectedTable === "__overview__") return;
+    if (!selectedTable || selectedTable === OVERVIEW_KEY || selectedTable === TOP_SONGS_KEY || selectedTable === TOP_USERS_KEY || selectedTable === PAYMENTS_KEY) return;
 
     authFetch(`${API_BASE}/api/database/tables/${selectedTable}`, {
       headers: authHeaders,
@@ -91,45 +172,32 @@ const AdminCrud = () => {
 
   useEffect(() => {
     loadOverview();
+    loadActivityLogs();
+    loadTopSongs("all");
+    loadTopUsers();
+    loadPaymentsReport("all");
+    loadRevenueSummary();
   }, []);
 
   useEffect(() => {
-    authFetch(`${API_BASE}/api/database/activity-logs`, {
-      headers: authHeaders,
-    })
-      .then((res) => res.ok ? res.json() : Promise.reject(res))
-      .then(setActivityLogs)
-      .catch((err) => {
-        console.error("Failed to fetch activity logs:", err);
-        setActivityLogs([]);
-      });
+    if (selectedTable === TOP_SONGS_KEY) {
+      loadTopSongs(topSongsPeriod);
+      return;
+    }
 
-    authFetch(`${API_BASE}/api/database/top-songs`, {
-      headers: authHeaders,
-    })
-      .then((res) => res.ok ? res.json() : Promise.reject(res))
-      .then(setTopSongs)
-      .catch((err) => {
-        console.error("Failed to fetch top songs:", err);
-        setTopSongs([]);
-      });
+    if (selectedTable === TOP_USERS_KEY) {
+      loadTopUsers();
+      return;
+    }
 
-    authFetch(`${API_BASE}/api/database/top-users`, {
-      headers: authHeaders,
-    })
-      .then((res) => res.ok ? res.json() : Promise.reject(res))
-      .then(setTopUsers)
-      .catch((err) => {
-        console.error("Failed to fetch top users:", err);
-        setTopUsers([]);
-      });
-  }, []);
+    if (selectedTable === PAYMENTS_KEY) {
+      loadPaymentsReport(paymentsFilter);
+      return;
+    }
 
-  useEffect(() => {
-    if (!selectedTable || selectedTable === "__overview__") return;
+    if (!selectedTable || selectedTable === OVERVIEW_KEY) return;
 
     loadTableData();
-
     authFetch(`${API_BASE}/api/database/tables/${selectedTable}/schema`, {
       headers: authHeaders,
     })
@@ -148,7 +216,7 @@ const AdminCrud = () => {
         setSchema([]);
         setPrimaryKey(null);
       });
-  }, [selectedTable]);
+  }, [selectedTable, topSongsPeriod, topUsersPeriod, paymentsFilter]);
 
   const handleChange = (e, name) => {
     const schemaColumn = schema.find((col) => col.name === name);
@@ -227,9 +295,7 @@ const AdminCrud = () => {
     return autoGeneratedFields.includes(columnName.toLowerCase());
   };
 
-  const isDisabledField = (columnName) => {
-    return editingId && isAutoGeneratedField(columnName);
-  };
+  const isDisabledField = (columnName) => editingId && isAutoGeneratedField(columnName);
 
   const renderInputField = (col) => {
     const isDisabled = isDisabledField(col.name);
@@ -274,6 +340,500 @@ const AdminCrud = () => {
 
   const supportsQuickStatusToggle = schema.some((col) => col.name === "is_active");
 
+  const revenueBars = [
+    { key: "all", label: "All Time", value: revenueSummary.revenue?.all || 0 },
+    { key: "month", label: "30 Days", value: revenueSummary.revenue?.month || 0 },
+    { key: "week", label: "7 Days", value: revenueSummary.revenue?.week || 0 },
+  ];
+  const maxRevenue = Math.max(...revenueBars.map((item) => item.value), 1);
+  const paymentStatusEntries = [
+    { key: "paid", label: "Paid", value: revenueSummary.payments_by_status?.paid || 0 },
+    { key: "pending", label: "Pending", value: revenueSummary.payments_by_status?.pending || 0 },
+    { key: "failed", label: "Failed", value: revenueSummary.payments_by_status?.failed || 0 },
+  ];
+  const totalPaymentStatuses = paymentStatusEntries.reduce((sum, item) => sum + item.value, 0) || 1;
+
+  const renderOverview = () => (
+    <div className="overview">
+      <h2>Overview</h2>
+      <div className="overview-cards">
+        <div className="card"><h3>Users</h3><p>{overview.users ?? "..."}</p></div>
+        <div className="card"><h3>Songs</h3><p>{overview.songs ?? "..."}</p></div>
+        <div className="card"><h3>Active Songs</h3><p>{dashboardMetrics.active_songs ?? "..."}</p></div>
+        <div className="card"><h3>Inactive Songs</h3><p>{dashboardMetrics.inactive_songs ?? "..."}</p></div>
+        <div className="card"><h3>Playlists</h3><p>{overview.playlists ?? "..."}</p></div>
+        <div className="card"><h3>Albums</h3><p>{overview.albums ?? "..."}</p></div>
+        <div className="card"><h3>Active Albums</h3><p>{dashboardMetrics.active_albums ?? "..."}</p></div>
+        <div className="card"><h3>Inactive Albums</h3><p>{dashboardMetrics.inactive_albums ?? "..."}</p></div>
+        <div className="card"><h3>Artists</h3><p>{overview.artists ?? "..."}</p></div>
+        <div className="card"><h3>Active Artists</h3><p>{dashboardMetrics.active_artists ?? "..."}</p></div>
+        <div className="card"><h3>Inactive Artists</h3><p>{dashboardMetrics.inactive_artists ?? "..."}</p></div>
+        <div className="card"><h3>Payments</h3><p>{dashboardMetrics.total_payments ?? "..."}</p></div>
+        <div className="card"><h3>Pending Payments</h3><p>{dashboardMetrics.pending_payments ?? "..."}</p></div>
+        <div className="card"><h3>Failed Payments</h3><p>{dashboardMetrics.failed_payments ?? "..."}</p></div>
+        <div className="card"><h3>Revenue</h3><p>{dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue ?? "..."}</p></div>
+        <div className="card"><h3>Free Users</h3><p>{dashboardMetrics.free_users ?? "..."}</p></div>
+        <div className="card"><h3>Premium Users</h3><p>{dashboardMetrics.premium_users ?? "..."}</p></div>
+        <div className="card"><h3>Active Subs</h3><p>{dashboardMetrics.active_subscriptions ?? "..."}</p></div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Recent Activity</h2>
+        <div className="data-table" style={{ overflowX: "auto" }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Details</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activityLogs.length === 0 ? (
+                <tr><td colSpan="5">No activity recorded yet.</td></tr>
+              ) : (
+                activityLogs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{log.username || "Unknown"}</td>
+                    <td>{log.action}</td>
+                    <td>{[log.target_type, log.target_id].filter(Boolean).join(": ") || "-"}</td>
+                    <td>{log.details || "-"}</td>
+                    <td>{log.created_at || "-"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Top Songs Snapshot</h2>
+        <div className="data-table" style={{ overflowX: "auto" }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Track</th>
+                <th>Artist</th>
+                <th>Plays</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topSongs.length === 0 ? (
+                <tr><td colSpan="4">No listening data yet.</td></tr>
+              ) : (
+                topSongs.slice(0, 5).map((song, index) => (
+                  <tr key={`${song.track_name}-${index}`}>
+                    <td>#{song.rank || index + 1}</td>
+                    <td>{song.track_name}</td>
+                    <td>{song.artist_name}</td>
+                    <td>{song.play_count}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Top Active Users</h2>
+        <div className="data-table" style={{ overflowX: "auto" }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Plan</th>
+                <th>Plays</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topUsers.length === 0 ? (
+                <tr><td colSpan="3">No listening data yet.</td></tr>
+              ) : (
+                topUsers.map((user, index) => (
+                  <tr key={`${user.username}-${index}`}>
+                    <td>{user.username}</td>
+                    <td>{user.account_type}</td>
+                    <td>{user.play_count}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Revenue Snapshot</h2>
+        <div className="mini-chart-grid">
+          {revenueBars.map((item) => (
+            <div className="mini-chart-card" key={item.key}>
+              <div className="mini-chart-label">{item.label}</div>
+              <div className="mini-chart-bar">
+                <div
+                  className="mini-chart-fill"
+                  style={{ width: `${Math.max((item.value / maxRevenue) * 100, item.value > 0 ? 8 : 0)}%` }}
+                />
+              </div>
+              <div className="mini-chart-value">{item.value.toLocaleString("vi-VN")} VND</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Payments by Status</h2>
+        <div className="mini-chart-grid">
+          {paymentStatusEntries.map((item) => (
+            <div className="mini-chart-card" key={item.key}>
+              <div className="mini-chart-label">{item.label}</div>
+              <div className="mini-chart-bar">
+                <div
+                  className={`mini-chart-fill mini-chart-fill--${item.key}`}
+                  style={{ width: `${Math.max((item.value / totalPaymentStatuses) * 100, item.value > 0 ? 8 : 0)}%` }}
+                />
+              </div>
+              <div className="mini-chart-value">{item.value} payment(s)</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTopSongsReport = () => (
+    <div className="overview">
+      <div className="report-header">
+        <div>
+          <h2>Top Songs Ranking</h2>
+          <p className="report-subtitle">Top 10 listening report by timeframe for admin review and business reporting.</p>
+        </div>
+        <div className="period-switcher">
+          {Object.keys(PERIOD_LABELS).map((period) => (
+            <button
+              key={period}
+              type="button"
+              className={`period-button ${topSongsPeriod === period ? "active" : ""}`}
+              onClick={() => setTopSongsPeriod(period)}
+            >
+              {PERIOD_LABELS[period]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="top-songs-hero">
+        <div className="hero-card hero-card--primary">
+          <span className="hero-label">Period</span>
+          <strong>{PERIOD_LABELS[topSongsPeriod]}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Ranked Tracks</span>
+          <strong>{topSongs.length}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Top Play Count</span>
+          <strong>{topSongs[0]?.play_count ?? 0}</strong>
+        </div>
+      </div>
+
+      <div className="ranking-board">
+        {topSongs.length === 0 ? (
+          <div className="empty-report">
+            <h3>No listening data yet</h3>
+            <p>Let users play some tracks, then this report will populate automatically.</p>
+          </div>
+        ) : (
+          topSongs.map((song) => (
+            <div className="ranking-row" key={`${topSongsPeriod}-${song.rank}-${song.track_name}`}>
+              <div className="ranking-rank">#{song.rank}</div>
+              <div className="ranking-main">
+                <div className="ranking-title">{song.track_name}</div>
+                <div className="ranking-subtitle">{song.artist_name}</div>
+              </div>
+              <div className="ranking-metric">
+                <span className="metric-value">{song.play_count}</span>
+                <span className="metric-label">plays</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="data-table" style={{ overflowX: "auto", marginTop: "28px" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Track</th>
+              <th>Artist</th>
+              <th>Plays</th>
+              <th>Period</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topSongs.length === 0 ? (
+              <tr><td colSpan="5">No listening data yet.</td></tr>
+            ) : (
+              topSongs.map((song) => (
+                <tr key={`table-${topSongsPeriod}-${song.rank}-${song.track_name}`}>
+                  <td>#{song.rank}</td>
+                  <td>{song.track_name}</td>
+                  <td>{song.artist_name}</td>
+                  <td>{song.play_count}</td>
+                  <td>{PERIOD_LABELS[topSongsPeriod]}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderPaymentsReport = () => (
+    <div className="overview">
+      <div className="report-header">
+        <div>
+          <h2>Payments Management</h2>
+          <p className="report-subtitle">Operational transaction view with status filtering for billing review.</p>
+        </div>
+        <div className="period-switcher">
+          {["all", "pending", "paid", "failed"].map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`period-button ${paymentsFilter === status ? "active" : ""}`}
+              onClick={() => setPaymentsFilter(status)}
+            >
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="top-songs-hero">
+        <div className="hero-card hero-card--primary">
+          <span className="hero-label">Current Filter</span>
+          <strong>{paymentsFilter.charAt(0).toUpperCase() + paymentsFilter.slice(1)}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Transactions</span>
+          <strong>{paymentsReport.length}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Paid Revenue</span>
+          <strong>
+            {paymentsReport
+              .filter((item) => item.status === "paid")
+              .reduce((sum, item) => sum + (item.amount || 0), 0)
+              .toLocaleString("vi-VN")}
+          </strong>
+        </div>
+      </div>
+
+      <div className="data-table" style={{ overflowX: "auto", marginTop: "28px" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Plan</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Updated</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paymentsReport.length === 0 ? (
+              <tr><td colSpan="8">No payments found for this filter.</td></tr>
+            ) : (
+              paymentsReport.map((payment) => (
+                <tr key={payment.id}>
+                  <td>{payment.username || "-"}</td>
+                  <td>{payment.plan_name || "-"}</td>
+                  <td>{payment.amount?.toLocaleString?.("vi-VN")} {payment.currency}</td>
+                  <td>{payment.provider}</td>
+                  <td>{payment.status}</td>
+                  <td>{payment.created_at || "-"}</td>
+                  <td>{payment.updated_at || "-"}</td>
+                  <td>{payment.note || "-"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderTopUsersReport = () => (
+    <div className="overview">
+      <div className="report-header">
+        <div>
+          <h2>Top Users Ranking</h2>
+          <p className="report-subtitle">User activity report by listening volume and timeframe.</p>
+        </div>
+        <div className="period-switcher">
+          {Object.keys(PERIOD_LABELS).map((period) => (
+            <button
+              key={period}
+              type="button"
+              className={`period-button ${topUsersPeriod === period ? "active" : ""}`}
+              onClick={() => setTopUsersPeriod(period)}
+            >
+              {PERIOD_LABELS[period]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="top-songs-hero">
+        <div className="hero-card hero-card--primary">
+          <span className="hero-label">Period</span>
+          <strong>{PERIOD_LABELS[topUsersPeriod]}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Ranked Users</span>
+          <strong>{topUsers.length}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Top Plays</span>
+          <strong>{topUsers[0]?.play_count ?? 0}</strong>
+        </div>
+      </div>
+
+      <div className="ranking-board">
+        {topUsers.length === 0 ? (
+          <div className="empty-report">
+            <h3>No user activity yet</h3>
+            <p>Ask users to listen to some tracks to populate this report.</p>
+          </div>
+        ) : (
+          topUsers.map((user) => (
+            <div className="ranking-row" key={`${topUsersPeriod}-${user.rank}-${user.username}`}>
+              <div className="ranking-rank">#{user.rank}</div>
+              <div className="ranking-main">
+                <div className="ranking-title">{user.username}</div>
+                <div className="ranking-subtitle">{user.account_type}</div>
+              </div>
+              <div className="ranking-metric">
+                <span className="metric-value">{user.play_count}</span>
+                <span className="metric-label">plays</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="data-table" style={{ overflowX: "auto", marginTop: "28px" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>User</th>
+              <th>Plan</th>
+              <th>Plays</th>
+              <th>Period</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topUsers.length === 0 ? (
+              <tr><td colSpan="5">No user activity yet.</td></tr>
+            ) : (
+              topUsers.map((user) => (
+                <tr key={`table-${topUsersPeriod}-${user.rank}-${user.username}`}>
+                  <td>#{user.rank}</td>
+                  <td>{user.username}</td>
+                  <td>{user.account_type}</td>
+                  <td>{user.play_count}</td>
+                  <td>{PERIOD_LABELS[topUsersPeriod]}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderCrudTable = () => (
+    <>
+      <h2>Table: {selectedTable}</h2>
+      <form onSubmit={handleSubmit} className="crud-form">
+        {schema
+          .filter((col) => !(!editingId && isAutoGeneratedField(col.name)))
+          .map(renderInputField)}
+        <button type="submit">{editingId ? "Update" : "Create"}</button>
+        {editingId && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setFormData({});
+            }}
+            style={{ marginLeft: "10px", backgroundColor: "#6c757d" }}
+          >
+            Cancel
+          </button>
+        )}
+      </form>
+
+      <table className="data-table">
+        <thead>
+          <tr>
+            {schema.map((col) => (
+              <th key={col.name}>{col.name}</th>
+            ))}
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.isArray(data) && data.map((row, i) => (
+            <tr key={i}>
+              {schema.map((col) => (
+                <td key={col.name}>
+                  {isAutoGeneratedField(col.name) ? (
+                    <span style={{ color: "#666", fontStyle: "italic" }}>
+                      {row[col.name]}
+                    </span>
+                  ) : typeof row[col.name] === "boolean" ? (
+                    row[col.name] ? "true" : "false"
+                  ) : (
+                    row[col.name]
+                  )}
+                </td>
+              ))}
+              <td>
+                <button onClick={() => handleEdit(row)}>Edit</button>
+                {supportsQuickStatusToggle && typeof row.is_active === "boolean" && (
+                  <button
+                    onClick={() => handleQuickToggleStatus(row)}
+                    title={row.is_active ? "Disable item" : "Enable item"}
+                    style={{
+                      marginLeft: "6px",
+                      backgroundColor: row.is_active ? "#8b1e1e" : "#1f6f3d",
+                      color: "#fff",
+                    }}
+                  >
+                    {row.is_active ? "Off" : "On"}
+                  </button>
+                )}
+                <button onClick={() => handleDelete(row[primaryKey])}>Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+
   return (
     <div className="admin-crud">
       <aside className="sidebar">
@@ -281,16 +841,32 @@ const AdminCrud = () => {
           <FaArrowLeft style={{ marginRight: "6px" }} />
           Back to Home
         </button>
-        <h2>📦 Tables</h2>
+        <h2>Admin Views</h2>
         <ul>
           <li
-            key="__overview__"
-            className={selectedTable === "__overview__" ? "active" : ""}
-            onClick={() => setSelectedTable("__overview__")}
+            className={selectedTable === OVERVIEW_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(OVERVIEW_KEY)}
           >
-            📊 Overview
+            Overview
           </li>
-
+          <li
+            className={selectedTable === TOP_SONGS_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(TOP_SONGS_KEY)}
+          >
+            Top Songs
+          </li>
+          <li
+            className={selectedTable === TOP_USERS_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(TOP_USERS_KEY)}
+          >
+            Top Users
+          </li>
+          <li
+            className={selectedTable === PAYMENTS_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(PAYMENTS_KEY)}
+          >
+            Payments
+          </li>
           {tables.map((table) => (
             <li
               key={table}
@@ -304,192 +880,18 @@ const AdminCrud = () => {
       </aside>
 
       <main className="main">
-        <h1>🛠 Admin Database</h1>
-
-        {selectedTable === "__overview__" ? (
-          <div className="overview">
-            <h2>📊 Overview</h2>
-            <div className="overview-cards">
-              <div className="card"><h3>👤 User</h3><p>{overview.users ?? "..."}</p></div>
-              <div className="card"><h3>🎵 Song</h3><p>{overview.songs ?? "..."}</p></div>
-              <div className="card"><h3>✅ Active Songs</h3><p>{dashboardMetrics.active_songs ?? "..."}</p></div>
-              <div className="card"><h3>⛔ Inactive Songs</h3><p>{dashboardMetrics.inactive_songs ?? "..."}</p></div>
-              <div className="card"><h3>📁 Playlist</h3><p>{overview.playlists ?? "..."}</p></div>
-              <div className="card"><h3>💿 Album</h3><p>{overview.albums ?? "..."}</p></div>
-              <div className="card"><h3>✅ Active Albums</h3><p>{dashboardMetrics.active_albums ?? "..."}</p></div>
-              <div className="card"><h3>⛔ Inactive Albums</h3><p>{dashboardMetrics.inactive_albums ?? "..."}</p></div>
-              <div className="card"><h3>🎤 Artist</h3><p>{overview.artists ?? "..."}</p></div>
-              <div className="card"><h3>✅ Active Artists</h3><p>{dashboardMetrics.active_artists ?? "..."}</p></div>
-              <div className="card"><h3>⛔ Inactive Artists</h3><p>{dashboardMetrics.inactive_artists ?? "..."}</p></div>
-              <div className="card"><h3>💳 Payments</h3><p>{dashboardMetrics.total_payments ?? "..."}</p></div>
-              <div className="card"><h3>⏳ Pending Payments</h3><p>{dashboardMetrics.pending_payments ?? "..."}</p></div>
-              <div className="card"><h3>❌ Failed Payments</h3><p>{dashboardMetrics.failed_payments ?? "..."}</p></div>
-              <div className="card"><h3>💰 Revenue</h3><p>{dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue ?? "..."}</p></div>
-              <div className="card"><h3>🆓 Free Users</h3><p>{dashboardMetrics.free_users ?? "..."}</p></div>
-              <div className="card"><h3>⭐ Premium Users</h3><p>{dashboardMetrics.premium_users ?? "..."}</p></div>
-              <div className="card"><h3>📄 Active Subs</h3><p>{dashboardMetrics.active_subscriptions ?? "..."}</p></div>
-            </div>
-
-            <div style={{ marginTop: "32px" }}>
-              <h2>🕒 Recent Activity</h2>
-              <div className="data-table" style={{ overflowX: "auto" }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Action</th>
-                      <th>Target</th>
-                      <th>Details</th>
-                      <th>Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activityLogs.length === 0 ? (
-                      <tr><td colSpan="5">No activity recorded yet.</td></tr>
-                    ) : (
-                      activityLogs.map((log) => (
-                        <tr key={log.id}>
-                          <td>{log.username || "Unknown"}</td>
-                          <td>{log.action}</td>
-                          <td>{[log.target_type, log.target_id].filter(Boolean).join(": ") || "-"}</td>
-                          <td>{log.details || "-"}</td>
-                          <td>{log.created_at || "-"}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div style={{ marginTop: "32px" }}>
-              <h2>🔥 Top Songs</h2>
-              <div className="data-table" style={{ overflowX: "auto" }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Track</th>
-                      <th>Artist</th>
-                      <th>Plays</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topSongs.length === 0 ? (
-                      <tr><td colSpan="3">No listening data yet.</td></tr>
-                    ) : (
-                      topSongs.map((song, index) => (
-                        <tr key={`${song.track_name}-${index}`}>
-                          <td>{song.track_name}</td>
-                          <td>{song.artist_name}</td>
-                          <td>{song.play_count}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div style={{ marginTop: "32px" }}>
-              <h2>👥 Top Active Users</h2>
-              <div className="data-table" style={{ overflowX: "auto" }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Plan</th>
-                      <th>Plays</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topUsers.length === 0 ? (
-                      <tr><td colSpan="3">No listening data yet.</td></tr>
-                    ) : (
-                      topUsers.map((user, index) => (
-                        <tr key={`${user.username}-${index}`}>
-                          <td>{user.username}</td>
-                          <td>{user.account_type}</td>
-                          <td>{user.play_count}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        ) : selectedTable ? (
-          <>
-            <h2>Table: {selectedTable}</h2>
-            <form onSubmit={handleSubmit} className="crud-form">
-              {schema
-                .filter((col) => !(!editingId && isAutoGeneratedField(col.name)))
-                .map(renderInputField)}
-              <button type="submit">{editingId ? "Update" : "Create"}</button>
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setFormData({});
-                  }}
-                  style={{ marginLeft: "10px", backgroundColor: "#6c757d" }}
-                >
-                  Cancel
-                </button>
-              )}
-            </form>
-
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {schema.map((col) => (
-                    <th key={col.name}>{col.name}</th>
-                  ))}
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.isArray(data) && data.map((row, i) => (
-                  <tr key={i}>
-                    {schema.map((col) => (
-                      <td key={col.name}>
-                        {isAutoGeneratedField(col.name) ? (
-                          <span style={{ color: "#666", fontStyle: "italic" }}>
-                            {row[col.name]}
-                          </span>
-                        ) : typeof row[col.name] === "boolean" ? (
-                          row[col.name] ? "true" : "false"
-                        ) : (
-                          row[col.name]
-                        )}
-                      </td>
-                    ))}
-                    <td>
-                      <button onClick={() => handleEdit(row)}>✏️</button>
-                      {supportsQuickStatusToggle && typeof row.is_active === "boolean" && (
-                        <button
-                          onClick={() => handleQuickToggleStatus(row)}
-                          title={row.is_active ? "Disable item" : "Enable item"}
-                          style={{
-                            marginLeft: "6px",
-                            backgroundColor: row.is_active ? "#8b1e1e" : "#1f6f3d",
-                            color: "#fff",
-                          }}
-                        >
-                          {row.is_active ? "Off" : "On"}
-                        </button>
-                      )}
-                      <button onClick={() => handleDelete(row[primaryKey])}>🗑️</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : (
-          <p>...</p>
-        )}
+        <h1>Admin Database</h1>
+        {selectedTable === OVERVIEW_KEY
+          ? renderOverview()
+          : selectedTable === TOP_SONGS_KEY
+            ? renderTopSongsReport()
+            : selectedTable === TOP_USERS_KEY
+              ? renderTopUsersReport()
+            : selectedTable === PAYMENTS_KEY
+              ? renderPaymentsReport()
+            : selectedTable
+              ? renderCrudTable()
+              : <p>...</p>}
       </main>
     </div>
   );
