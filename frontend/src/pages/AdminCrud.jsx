@@ -10,6 +10,7 @@ const OVERVIEW_KEY = "__overview__";
 const TOP_SONGS_KEY = "__top_songs__";
 const TOP_USERS_KEY = "__top_users__";
 const PAYMENTS_KEY = "__payments__";
+const SUBSCRIPTIONS_KEY = "__subscriptions__";
 
 const PERIOD_LABELS = {
   all: "All Time",
@@ -34,10 +35,14 @@ const AdminCrud = () => {
   const [topUsersPeriod, setTopUsersPeriod] = useState("all");
   const [paymentsReport, setPaymentsReport] = useState([]);
   const [paymentsFilter, setPaymentsFilter] = useState("all");
+  const [subscriptionsReport, setSubscriptionsReport] = useState([]);
+  const [subscriptionsFilter, setSubscriptionsFilter] = useState("all");
+  const [subscriptionAlerts, setSubscriptionAlerts] = useState([]);
   const [revenueSummary, setRevenueSummary] = useState({
     revenue: { all: 0, week: 0, month: 0 },
     payments_by_status: { pending: 0, paid: 0, failed: 0 },
   });
+  const [revenueHistory, setRevenueHistory] = useState([]);
   const navigate = useNavigate();
 
   const authHeaders = {
@@ -117,6 +122,42 @@ const AdminCrud = () => {
       });
   };
 
+  const loadRevenueHistory = () => {
+    authFetch(`${API_BASE}/api/database/revenue-history`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setRevenueHistory(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch revenue history:", err);
+        setRevenueHistory([]);
+      });
+  };
+
+  const loadSubscriptionsReport = (status = subscriptionsFilter) => {
+    authFetch(`${API_BASE}/api/database/subscriptions-report?status=${status}`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setSubscriptionsReport(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch subscriptions report:", err);
+        setSubscriptionsReport([]);
+      });
+  };
+
+  const loadSubscriptionAlerts = () => {
+    authFetch(`${API_BASE}/api/database/subscription-alerts`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setSubscriptionAlerts(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch subscription alerts:", err);
+        setSubscriptionAlerts([]);
+      });
+  };
+
   const loadPaymentsReport = (status = paymentsFilter) => {
     authFetch(`${API_BASE}/api/database/payments-report?status=${status}`, {
       headers: authHeaders,
@@ -130,7 +171,7 @@ const AdminCrud = () => {
   };
 
   const loadTableData = () => {
-    if (!selectedTable || selectedTable === OVERVIEW_KEY || selectedTable === TOP_SONGS_KEY || selectedTable === TOP_USERS_KEY || selectedTable === PAYMENTS_KEY) return;
+    if (!selectedTable || selectedTable === OVERVIEW_KEY || selectedTable === TOP_SONGS_KEY || selectedTable === TOP_USERS_KEY || selectedTable === PAYMENTS_KEY || selectedTable === SUBSCRIPTIONS_KEY) return;
 
     authFetch(`${API_BASE}/api/database/tables/${selectedTable}`, {
       headers: authHeaders,
@@ -177,6 +218,9 @@ const AdminCrud = () => {
     loadTopUsers();
     loadPaymentsReport("all");
     loadRevenueSummary();
+    loadRevenueHistory();
+    loadSubscriptionsReport("all");
+    loadSubscriptionAlerts();
   }, []);
 
   useEffect(() => {
@@ -192,6 +236,12 @@ const AdminCrud = () => {
 
     if (selectedTable === PAYMENTS_KEY) {
       loadPaymentsReport(paymentsFilter);
+      return;
+    }
+
+    if (selectedTable === SUBSCRIPTIONS_KEY) {
+      loadSubscriptionsReport(subscriptionsFilter);
+      loadSubscriptionAlerts();
       return;
     }
 
@@ -216,7 +266,7 @@ const AdminCrud = () => {
         setSchema([]);
         setPrimaryKey(null);
       });
-  }, [selectedTable, topSongsPeriod, topUsersPeriod, paymentsFilter]);
+  }, [selectedTable, topSongsPeriod, topUsersPeriod, paymentsFilter, subscriptionsFilter]);
 
   const handleChange = (e, name) => {
     const schemaColumn = schema.find((col) => col.name === name);
@@ -352,6 +402,7 @@ const AdminCrud = () => {
     { key: "failed", label: "Failed", value: revenueSummary.payments_by_status?.failed || 0 },
   ];
   const totalPaymentStatuses = paymentStatusEntries.reduce((sum, item) => sum + item.value, 0) || 1;
+  const maxRevenueHistory = Math.max(...revenueHistory.map((item) => item.revenue || 0), 1);
 
   const renderOverview = () => (
     <div className="overview">
@@ -375,6 +426,7 @@ const AdminCrud = () => {
         <div className="card"><h3>Free Users</h3><p>{dashboardMetrics.free_users ?? "..."}</p></div>
         <div className="card"><h3>Premium Users</h3><p>{dashboardMetrics.premium_users ?? "..."}</p></div>
         <div className="card"><h3>Active Subs</h3><p>{dashboardMetrics.active_subscriptions ?? "..."}</p></div>
+        <div className="card"><h3>Expiring Soon</h3><p>{dashboardMetrics.expiring_subscriptions ?? "..."}</p></div>
       </div>
 
       <div style={{ marginTop: "32px" }}>
@@ -500,6 +552,31 @@ const AdminCrud = () => {
               <div className="mini-chart-value">{item.value} payment(s)</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: "32px" }}>
+        <h2>Monthly Revenue History</h2>
+        <div className="history-chart">
+          {revenueHistory.length === 0 ? (
+            <div className="empty-report">
+              <h3>No paid revenue yet</h3>
+              <p>Revenue bars will appear here after successful paid transactions.</p>
+            </div>
+          ) : (
+            revenueHistory.map((item) => (
+              <div className="history-bar-card" key={item.month}>
+                <div className="history-bar-label">{item.month}</div>
+                <div className="history-bar-track">
+                  <div
+                    className="history-bar-fill"
+                    style={{ height: `${Math.max((item.revenue / maxRevenueHistory) * 140, item.revenue > 0 ? 18 : 0)}px` }}
+                  />
+                </div>
+                <div className="history-bar-value">{item.revenue.toLocaleString("vi-VN")}</div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -664,6 +741,100 @@ const AdminCrud = () => {
                   <td>{payment.created_at || "-"}</td>
                   <td>{payment.updated_at || "-"}</td>
                   <td>{payment.note || "-"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderSubscriptionsReport = () => (
+    <div className="overview">
+      <div className="report-header">
+        <div>
+          <h2>Subscriptions Management</h2>
+          <p className="report-subtitle">Track active, pending, expired, and cancelled subscriptions with expiring-soon alerts.</p>
+        </div>
+        <div className="period-switcher">
+          {["all", "active", "pending_payment", "cancelled", "expired"].map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={`period-button ${subscriptionsFilter === status ? "active" : ""}`}
+              onClick={() => setSubscriptionsFilter(status)}
+            >
+              {status === "pending_payment" ? "Pending" : status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="top-songs-hero">
+        <div className="hero-card hero-card--primary">
+          <span className="hero-label">Current Filter</span>
+          <strong>{subscriptionsFilter === "pending_payment" ? "Pending" : subscriptionsFilter.charAt(0).toUpperCase() + subscriptionsFilter.slice(1)}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Subscriptions</span>
+          <strong>{subscriptionsReport.length}</strong>
+        </div>
+        <div className="hero-card">
+          <span className="hero-label">Expiring Soon</span>
+          <strong>{subscriptionAlerts.length}</strong>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "28px" }}>
+        <h2>Expiring Soon Alerts</h2>
+        <div className="alert-list">
+          {subscriptionAlerts.length === 0 ? (
+            <div className="empty-report">
+              <h3>No expiring subscriptions</h3>
+              <p>No mock email alerts are needed right now.</p>
+            </div>
+          ) : (
+            subscriptionAlerts.map((alert, index) => (
+              <div className="alert-card" key={`${alert.email}-${index}`}>
+                <div className="alert-header">
+                  <strong>{alert.username}</strong>
+                  <span>{alert.plan_name}</span>
+                </div>
+                <p>{alert.notification_preview}</p>
+                <small>Expires at: {alert.expires_at}</small>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="data-table" style={{ overflowX: "auto", marginTop: "28px" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Plan</th>
+              <th>Status</th>
+              <th>Auto Renew</th>
+              <th>Started</th>
+              <th>Expires</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {subscriptionsReport.length === 0 ? (
+              <tr><td colSpan="7">No subscriptions found for this filter.</td></tr>
+            ) : (
+              subscriptionsReport.map((subscription) => (
+                <tr key={subscription.id}>
+                  <td>{subscription.username || "-"}</td>
+                  <td>{subscription.plan_name || subscription.plan_code || "-"}</td>
+                  <td>{subscription.status}</td>
+                  <td>{subscription.auto_renew ? "Enabled" : "Disabled"}</td>
+                  <td>{subscription.started_at || "-"}</td>
+                  <td>{subscription.expires_at || "-"}</td>
+                  <td>{subscription.updated_at || "-"}</td>
                 </tr>
               ))
             )}
@@ -867,6 +1038,12 @@ const AdminCrud = () => {
           >
             Payments
           </li>
+          <li
+            className={selectedTable === SUBSCRIPTIONS_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(SUBSCRIPTIONS_KEY)}
+          >
+            Subscriptions
+          </li>
           {tables.map((table) => (
             <li
               key={table}
@@ -889,6 +1066,8 @@ const AdminCrud = () => {
               ? renderTopUsersReport()
             : selectedTable === PAYMENTS_KEY
               ? renderPaymentsReport()
+            : selectedTable === SUBSCRIPTIONS_KEY
+              ? renderSubscriptionsReport()
             : selectedTable
               ? renderCrudTable()
               : <p>...</p>}

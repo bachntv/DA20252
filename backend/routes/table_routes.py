@@ -173,6 +173,15 @@ def get_dashboard_metrics():
         cur.execute("SELECT COUNT(*) FROM public.subscriptions WHERE status = 'active'")
         metrics["active_subscriptions"] = cur.fetchone()[0]
 
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM public.subscriptions
+            WHERE status = 'active'
+              AND expires_at IS NOT NULL
+              AND expires_at <= NOW() + INTERVAL '7 days'
+        """)
+        metrics["expiring_subscriptions"] = cur.fetchone()[0]
+
         cur.execute("SELECT COUNT(*) FROM public.payments")
         metrics["total_payments"] = cur.fetchone()[0]
 
@@ -431,6 +440,129 @@ def get_revenue_summary():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Revenue summary failed: {str(e)}")
+
+
+@router.get("/revenue-history")
+def get_revenue_history():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month_key,
+                COALESCE(SUM(amount), 0) AS revenue
+            FROM public.payments
+            WHERE status = 'paid'
+              AND created_at >= DATE_TRUNC('month', NOW()) - INTERVAL '5 months'
+            GROUP BY DATE_TRUNC('month', created_at), TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM')
+            ORDER BY DATE_TRUNC('month', created_at) ASC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "items": [
+                {
+                    "month": row[0],
+                    "revenue": row[1],
+                }
+                for row in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Revenue history failed: {str(e)}")
+
+
+@router.get("/subscriptions-report")
+def get_subscriptions_report(status: str = Query("all", pattern="^(all|active|pending_payment|cancelled|expired)$")):
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        where_clause = ""
+        params = []
+        if status != "all":
+            where_clause = "WHERE s.status = %s"
+            params.append(status)
+
+        cur.execute(f"""
+            SELECT
+                s.id,
+                u.username,
+                p.name,
+                p.code,
+                s.status,
+                s.auto_renew,
+                s.started_at,
+                s.expires_at,
+                s.updated_at
+            FROM public.subscriptions s
+            LEFT JOIN public.users u ON u.id = s.user_id
+            LEFT JOIN public.plans p ON p.id = s.plan_id
+            {where_clause}
+            ORDER BY s.updated_at DESC
+            LIMIT 100
+        """, params)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "status": status,
+            "items": [
+                {
+                    "id": row[0],
+                    "username": row[1],
+                    "plan_name": row[2],
+                    "plan_code": row[3],
+                    "status": row[4],
+                    "auto_renew": row[5],
+                    "started_at": row[6].isoformat() if row[6] else None,
+                    "expires_at": row[7].isoformat() if row[7] else None,
+                    "updated_at": row[8].isoformat() if row[8] else None,
+                }
+                for row in rows
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Subscriptions report failed: {str(e)}")
+
+
+@router.get("/subscription-alerts")
+def get_subscription_alerts():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                u.username,
+                u.email,
+                p.name,
+                s.expires_at
+            FROM public.subscriptions s
+            JOIN public.users u ON u.id = s.user_id
+            JOIN public.plans p ON p.id = s.plan_id
+            WHERE s.status = 'active'
+              AND s.expires_at IS NOT NULL
+              AND s.expires_at <= NOW() + INTERVAL '7 days'
+            ORDER BY s.expires_at ASC
+            LIMIT 20
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {
+            "items": [
+                {
+                    "username": row[0],
+                    "email": row[1],
+                    "plan_name": row[2],
+                    "expires_at": row[3].isoformat() if row[3] else None,
+                    "notification_preview": f"[Mock email] Dear {row[0]}, your {row[2]} subscription will expire soon. Please renew to keep Premium access."
+                }
+                for row in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Subscription alerts failed: {str(e)}")
 
 
 

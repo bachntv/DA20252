@@ -54,6 +54,7 @@
 - Top songs reports
 - Top users reports
 - Payments report
+- Subscriptions report
 
 ## 4. Enterprise Features Added
 
@@ -80,6 +81,8 @@
   - Premium user can renew for 30 more days
 - Auto-renew simulation:
   - if Premium expires and `auto_renew=true`, backend auto-extends the subscription and creates a paid payment
+- Expiry warning:
+  - Billing page warns when the subscription is close to expiry
 
 ### Admin Reporting
 - Dashboard metrics:
@@ -87,6 +90,7 @@
   - free users
   - premium users
   - active subscriptions
+  - expiring subscriptions
   - total payments
   - pending payments
   - failed payments
@@ -98,14 +102,21 @@
   - `Top Songs`
   - `Top Users`
   - `Payments`
+  - `Subscriptions`
 - Time filters:
   - Top Songs: `all / week / month`
   - Top Users: `all / week / month`
 - Payment status filters:
   - `all / pending / paid / failed`
+- Subscription status filters:
+  - `all / active / pending_payment / cancelled / expired`
 - Mini charts in overview:
   - revenue snapshot
   - payments by status
+  - monthly revenue history
+- Mock notification handling:
+  - admin-facing expiring-subscription alert cards
+  - notification preview text for simulated email/internal reminder
 
 ## 5. Status Management Added
 
@@ -149,6 +160,7 @@ Behavior:
 - `start-dev.ps1`
 - `docker-compose.yml`
 - `frontend/.env.development`
+- `PROJECT_STATUS.md`
 
 ## 7. Important Runtime Notes
 
@@ -210,24 +222,27 @@ Remove-Item "C:\code\20252 da\.git\index.lock" -Force
 - Some old UI text may still have encoding artifacts
 - Admin CRUD is functional but still somewhat generic visually
 - No full automated test suite has been added yet
+- Expiry alerts are mock/internal previews only, not real email delivery
 
 ## 9. Recommended Next Steps
 
 ### Best next engineering tasks
-1. Add a dedicated `Subscriptions` admin report page
-2. Add monthly revenue chart / timeline report
-3. Add payment success-rate KPI
-4. Add user notification / mock email log for expiring subscriptions
-5. Add search / filter in admin reports
-6. Clean remaining text encoding issues in frontend labels/messages
-7. Add basic test coverage for billing workflow
+1. Add payment success-rate KPI
+2. Add search / filter in admin reports
+3. Add export CSV for payments / subscriptions reports
+4. Add a persistent notification log table for expiry and payment events
+5. Clean remaining text encoding issues in frontend labels/messages
+6. Add basic test coverage for billing workflow
+7. Add a real payment gateway only if thesis scope requires it
 
 ### Best next thesis/demo tasks
 1. Prepare a clean demo flow:
    - normal user playback
    - billing upgrade request
    - confirm payment
+   - expiring-soon warning / manual renewal
    - admin payments review
+   - admin subscriptions review
    - top songs / top users / revenue dashboard
 2. Update thesis wording to match enterprise software direction
 3. Prepare screenshots for:
@@ -248,4 +263,3 @@ Optional extra context:
 - `We are continuing the enterprise-software graduation project`
 - `Focus on backend/frontend code, not thesis writing`
 - `Next task: ...`
-

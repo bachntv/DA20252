@@ -456,6 +456,103 @@
   font-weight: 700;
 }
 
+.history-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 16px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.history-bar-card {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 16px 14px;
+  box-shadow: var(--shadow-sm);
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.history-bar-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.history-bar-track {
+  height: 150px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px;
+}
+
+.history-bar-fill {
+  width: 100%;
+  max-width: 46px;
+  border-radius: 14px 14px 8px 8px;
+  background: linear-gradient(180deg, var(--accent-secondary), var(--accent-primary));
+  box-shadow: 0 10px 24px rgba(176, 150, 1, 0.18);
+}
+
+.history-bar-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: center;
+  word-break: break-word;
+}
+
+.alert-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.alert-card {
+  background: linear-gradient(135deg, rgba(176, 150, 1, 0.18), rgba(214, 193, 90, 0.08));
+  border: 1px solid rgba(176, 150, 1, 0.22);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.alert-card p {
+  margin: 12px 0 8px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.alert-card small {
+  color: var(--text-secondary);
+}
+
+.alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.alert-header strong {
+  color: var(--text-primary);
+}
+
+.alert-header span {
+  color: var(--accent-primary-hover);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 @media (max-width: 900px) {
   .report-header {
     flex-direction: column;
