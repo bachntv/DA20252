@@ -1,0 +1,5 @@
+.settings-language-root { padding: 24px; background: #e3f2fd; border-radius: 10px; }
+.settings-language-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 18px; }
+.settings-language-select { padding: 8px 12px; border-radius: 6px; border: 1.5px solid #b3c6ff; font-size: 1rem; background: #f4f8ff; }
+.settings-language-list { margin-top: 16px; }
+.settings-language-item { padding: 6px 0; font-size: 1rem; }

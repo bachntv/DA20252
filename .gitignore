@@ -1,0 +1,37 @@
+# Environment variables
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Cache
+.cache/
+
+# IDE/editor settings
+.vscode/
+.idea
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing outputs
+coverage/
+
+# Sensitive files
+gcs_key.json
+airflow/cookies.txt
+
+/airflow
+/music-recommender
+backend/cookies.txt
+.vercel

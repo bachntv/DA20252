@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - backend/.env
+    volumes:
+      - ./backend/music:/app/music
+    restart: always
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
+
+  airflow:
+    build:
+      context: ./airflow
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create --username admin --password admin --firstname Air --lastname Flow --role Admin --email admin@example.com &&
+        airflow scheduler &
+        exec airflow webserver"
+    env_file:
+      - airflow/.env
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/.env:/opt/airflow/.env
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/progress.json:/opt/airflow/progress.json
+      - ./airflow/tracks.json:/opt/airflow/tracks.json
+      - ./airflow/data:/opt/airflow/data
+      - ./airflow/cookies.txt:/opt/airflow/cookies.txt
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: music_streaming
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: always
+
+volumes:
+  pgdata:
+  minio_data:

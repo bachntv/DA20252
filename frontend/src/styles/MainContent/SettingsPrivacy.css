@@ -1,0 +1,5 @@
+.settings-privacy-root { padding: 24px; background: #fce4ec; border-radius: 10px; }
+.settings-privacy-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 18px; }
+.settings-privacy-options { display: flex; flex-direction: column; gap: 14px; }
+.settings-privacy-checkbox { display: flex; align-items: center; gap: 8px; }
+.settings-privacy-level { margin-top: 12px; font-size: 1rem; font-weight: 500; }

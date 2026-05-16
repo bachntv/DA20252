@@ -1,0 +1,67 @@
+.settings-theme-root {
+	padding: 24px;
+	background: linear-gradient(120deg, #f4f8ff 60%, #e3f2fd 100%);
+	border-radius: 16px;
+	box-shadow: 0 2px 12px #e0e0e0;
+	max-width: 480px;
+	margin: 0 auto;
+}
+.settings-theme-title {
+	font-size: 1.5rem;
+	font-weight: 700;
+	margin-bottom: 22px;
+	color: #1976d2;
+	letter-spacing: 0.5px;
+}
+.settings-theme-options {
+	display: flex;
+	gap: 18px;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+}
+.settings-theme-color {
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	border: 2.5px solid #b3c6ff;
+	cursor: pointer;
+	transition: border 0.2s, box-shadow 0.2s;
+	box-shadow: 0 1px 4px #e0e0e0;
+}
+.settings-theme-color.selected {
+	border: 3px solid #1976d2;
+	box-shadow: 0 2px 8px #90caf9;
+}
+.settings-theme-preview {
+	margin-top: 22px;
+	padding: 16px;
+	background: #fff;
+	border-radius: 10px;
+	box-shadow: 0 1px 8px #e0e0e0;
+	font-size: 1.1rem;
+	color: #333;
+}
+@media (max-width: 600px) {
+	.settings-theme-root {
+		padding: 12px;
+		border-radius: 8px;
+		max-width: 98vw;
+	}
+	.settings-theme-title {
+		font-size: 1.1rem;
+		margin-bottom: 12px;
+	}
+	.settings-theme-options {
+		gap: 10px;
+		margin-bottom: 10px;
+	}
+	.settings-theme-color {
+		width: 32px;
+		height: 32px;
+	}
+	.settings-theme-preview {
+		margin-top: 10px;
+		padding: 8px;
+		font-size: 1rem;
+	}
+}

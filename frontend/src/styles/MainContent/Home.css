@@ -1,0 +1,35 @@
+/* =========================================
+   HOME LAYOUT
+   ========================================= */
+.home {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.home-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.main-outlet {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  margin: 0 10px 10px 0;
+  box-shadow: var(--shadow-sm);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.main-outlet::-webkit-scrollbar {
+  display: none;
+}

@@ -1,0 +1,107 @@
+/* =========================================
+   RECOMMEND SONGS - Glassmorphism Theme
+   ========================================= */
+
+.recommend-title {
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* Horizontal scroll with custom thin scrollbar */
+.scroll-container {
+  display: flex;
+  gap: 16px;
+  scroll-behavior: smooth;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+
+  /* Firefox - thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+/* Custom WebKit scrollbar */
+.scroll-container::-webkit-scrollbar {
+  height: 5px;
+}
+
+.scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+  transition: background var(--transition-normal);
+}
+
+.scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.scroll-container::-webkit-scrollbar-button {
+  display: none;
+}
+
+.scroll-container::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Music Card */
+.music-card {
+  min-width: 170px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  opacity: 0;
+  animation: fadeIn 0.4s ease forwards;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.music-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-hover);
+}
+
+.music-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.music-card .title {
+  margin: 12px 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-card .subtitle {
+  margin: 4px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}

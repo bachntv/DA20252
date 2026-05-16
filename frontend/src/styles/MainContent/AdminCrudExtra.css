@@ -1,0 +1,9 @@
+.admincrud-extra-root { padding: 32px; }
+.admincrud-extra-section { margin-bottom: 40px; background: #f9f9f9; border-radius: 12px; box-shadow: 0 2px 8px #eee; padding: 24px; }
+.admincrud-extra-section h2 { color: #2d2d2d; margin-bottom: 16px; }
+.admincrud-extra-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+.admincrud-extra-table th, .admincrud-extra-table td { border: 1px solid #ddd; padding: 8px 12px; }
+.admincrud-extra-table th { background: #1976d2; color: #fff; }
+.admincrud-extra-table tr:nth-child(even) { background: #f0f4ff; }
+.admincrud-extra-table button { background: #e53935; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+.admincrud-extra-table button:hover { background: #b71c1c; }

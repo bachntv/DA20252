@@ -1,0 +1,6 @@
+.settings-security-root { padding: 24px; background: #fff3e0; border-radius: 10px; }
+.settings-security-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 18px; }
+.settings-security-options { display: flex; flex-direction: column; gap: 14px; }
+.settings-security-checkbox { display: flex; align-items: center; gap: 8px; }
+.settings-security-history { margin-top: 18px; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px #e0e0e0; padding: 12px; }
+.settings-security-history-title { font-weight: 500; margin-bottom: 8px; }

@@ -1,0 +1,77 @@
+.home-history-container {
+	background: #e8f5e9;
+	border-radius: 12px;
+	padding: 32px;
+	margin: 32px auto;
+	max-width: 600px;
+	box-shadow: 0 2px 8px #c8e6c9;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.home-history-title {
+	color: #388e3c;
+	font-size: 1.5rem;
+	font-weight: 700;
+	margin-bottom: 18px;
+	letter-spacing: 1px;
+	text-align: center;
+}
+
+.home-history-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.home-history-entry {
+	padding: 12px 0;
+	border-bottom: 1px solid #a5d6a7;
+	font-size: 1.08rem;
+	color: #2e7d32;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.home-history-entry:last-child {
+	border-bottom: none;
+}
+
+.home-history-date {
+	color: #757575;
+	font-size: 0.95rem;
+	margin-left: 16px;
+}
+
+.home-history-icon {
+	width: 24px;
+	height: 24px;
+	margin-right: 10px;
+	vertical-align: middle;
+}
+
+.home-history-clear-btn {
+	background: #e53935;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	padding: 6px 16px;
+	cursor: pointer;
+	font-size: 1rem;
+	font-weight: 500;
+	margin-top: 18px;
+	transition: background 0.2s;
+}
+
+.home-history-clear-btn:hover {
+	background: #b71c1c;
+}
+
+.home-history-empty {
+	color: #bdbdbd;
+	text-align: center;
+	font-style: italic;
+	margin: 32px 0;
+}

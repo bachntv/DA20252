@@ -1,0 +1,7 @@
+.settings-notifications-root { padding: 24px; background: #f1f8e9; border-radius: 10px; }
+.settings-notifications-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 18px; }
+.settings-notifications-list { display: flex; flex-direction: column; gap: 10px; }
+.settings-notifications-item { display: flex; align-items: center; gap: 10px; }
+.settings-notifications-toggle { width: 40px; height: 20px; background: #b3c6ff; border-radius: 10px; position: relative; cursor: pointer; }
+.settings-notifications-toggle.active { background: #43a047; }
+.settings-notifications-toggle-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left 0.2s; }
