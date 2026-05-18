@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 import cloudinary
 import cloudinary.uploader
 import os
+import json
 from uuid import uuid4
 from dotenv import load_dotenv
 from utils.recommender_loader import recommender
@@ -1305,11 +1306,38 @@ def update_last_played(
     return {"message": f"Updated last_played for item {item_id}"}
 
 
-# Corrected Gemini configuration
 API_KEY = os.getenv("GEMINI_API_KEY")
 import google.generativeai as genai
 
-genai.configure(api_key=API_KEY)
+if API_KEY:
+    genai.configure(api_key=API_KEY)
+
+
+def build_local_emotion_reply(user_prompt: str) -> dict:
+    text = user_prompt.lower()
+    mood_rules = [
+        ("Angry", ["angry", "mad", "furious", "annoyed", "buc", "tuc", "cay", "gian"]),
+        ("Sad", ["sad", "down", "cry", "heartbroken", "buon", "khoc", "met moi", "chan"]),
+        ("Lonely", ["lonely", "alone", "empty", "co don", "mot minh", "trong rong"]),
+        ("Happy", ["happy", "great", "excited", "vui", "hanh phuc", "yeu doi"]),
+        ("Chill", ["calm", "relax", "chill", "peaceful", "binh yen", "thu gian"]),
+    ]
+
+    mood = "Chill"
+    for candidate, keywords in mood_rules:
+        if any(keyword in text for keyword in keywords):
+            mood = candidate
+            break
+
+    intros = {
+        "Angry": "It sounds like there is a lot of tension in you right now. Take a moment to breathe, and maybe these songs can help release some of that energy.",
+        "Sad": "I am sorry you are feeling this way. Let yourself slow down for a while, and maybe these songs can sit with you gently.",
+        "Lonely": "Feeling alone can be heavy, even when it is hard to explain. Maybe these songs can make the moment feel a little less quiet.",
+        "Happy": "That sounds like a bright moment worth enjoying. Maybe these songs can keep that good feeling moving.",
+        "Chill": "It sounds like you need something easy and steady right now. Maybe these songs can help you settle into that mood.",
+    }
+
+    return {"intro": intros[mood], "mood": mood}
 
 @router.post("/ask")
 async def ask_gemini(
@@ -1326,6 +1354,10 @@ async def ask_gemini(
 
     if not user_prompt:
         raise HTTPException(status_code=400, detail="Prompt không được để trống!")
+
+    if not API_KEY:
+        fallback = build_local_emotion_reply(user_prompt)
+        return {"reply": json.dumps(fallback)}
 
     final_prompt = f"""
 You are an empathetic and emotionally intelligent assistant.
@@ -1354,7 +1386,8 @@ User input:
 """
 
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(final_prompt)
 
         # Extract the response text
@@ -1365,5 +1398,6 @@ User input:
             raise HTTPException(status_code=500, detail="Gemini không trả về dữ liệu hợp lệ.")
 
     except Exception as e:
-        print("🔥 Lỗi khi gọi Gemini:", str(e))
-        raise HTTPException(status_code=500, detail="Lỗi máy chủ khi gọi Gemini.")
+        print("Gemini call failed, using local emotion fallback:", str(e))
+        fallback = build_local_emotion_reply(user_prompt)
+        return {"reply": json.dumps(fallback)}

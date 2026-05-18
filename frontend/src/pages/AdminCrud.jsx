@@ -11,6 +11,7 @@ const TOP_SONGS_KEY = "__top_songs__";
 const TOP_USERS_KEY = "__top_users__";
 const PAYMENTS_KEY = "__payments__";
 const SUBSCRIPTIONS_KEY = "__subscriptions__";
+const NOTIFICATIONS_KEY = "__notifications__";
 
 const PERIOD_LABELS = {
   all: "All Time",
@@ -33,11 +34,27 @@ const AdminCrud = () => {
   const [topUsers, setTopUsers] = useState([]);
   const [topSongsPeriod, setTopSongsPeriod] = useState("all");
   const [topUsersPeriod, setTopUsersPeriod] = useState("all");
+  const [topSongsSearch, setTopSongsSearch] = useState("");
+  const [topUsersSearch, setTopUsersSearch] = useState("");
+  const [topUsersPlan, setTopUsersPlan] = useState("all");
+  const [topSongsSort, setTopSongsSort] = useState("plays_desc");
+  const [topUsersSort, setTopUsersSort] = useState("plays_desc");
   const [paymentsReport, setPaymentsReport] = useState([]);
   const [paymentsFilter, setPaymentsFilter] = useState("all");
+  const [paymentsSearch, setPaymentsSearch] = useState("");
+  const [paymentsPlan, setPaymentsPlan] = useState("all");
+  const [paymentsSort, setPaymentsSort] = useState("created_desc");
   const [subscriptionsReport, setSubscriptionsReport] = useState([]);
   const [subscriptionsFilter, setSubscriptionsFilter] = useState("all");
+  const [subscriptionsSearch, setSubscriptionsSearch] = useState("");
+  const [subscriptionsPlan, setSubscriptionsPlan] = useState("all");
+  const [subscriptionsExpiringDays, setSubscriptionsExpiringDays] = useState("0");
+  const [subscriptionsSort, setSubscriptionsSort] = useState("updated_desc");
   const [subscriptionAlerts, setSubscriptionAlerts] = useState([]);
+  const [notificationLogs, setNotificationLogs] = useState([]);
+  const [notificationSearch, setNotificationSearch] = useState("");
+  const [notificationType, setNotificationType] = useState("all");
+  const [reportLoading, setReportLoading] = useState(false);
   const [revenueSummary, setRevenueSummary] = useState({
     revenue: { all: 0, week: 0, month: 0 },
     payments_by_status: { pending: 0, paid: 0, failed: 0 },
@@ -47,6 +64,22 @@ const AdminCrud = () => {
 
   const authHeaders = {
     Authorization: `Bearer ${localStorage.getItem("token")}`,
+  };
+
+  const buildQuery = (params) => new URLSearchParams(params).toString();
+
+  const downloadCsv = async (path, filename) => {
+    const res = await authFetch(`${API_BASE}${path}`, { headers: authHeaders });
+    if (!res.ok) throw new Error(`Failed to export ${filename}`);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const loadOverview = () => {
@@ -72,7 +105,9 @@ const AdminCrud = () => {
   };
 
   const loadTopSongs = (period = topSongsPeriod) => {
-    authFetch(`${API_BASE}/api/database/top-songs?period=${period}`, {
+    const query = buildQuery({ period, search: topSongsSearch, sort: topSongsSort, limit: 100 });
+    setReportLoading(true);
+    authFetch(`${API_BASE}/api/database/top-songs?${query}`, {
       headers: authHeaders,
     })
       .then((res) => res.ok ? res.json() : Promise.reject(res))
@@ -80,7 +115,8 @@ const AdminCrud = () => {
       .catch((err) => {
         console.error("Failed to fetch top songs:", err);
         setTopSongs([]);
-      });
+      })
+      .finally(() => setReportLoading(false));
   };
 
   const loadActivityLogs = () => {
@@ -96,7 +132,9 @@ const AdminCrud = () => {
   };
 
   const loadTopUsers = () => {
-    authFetch(`${API_BASE}/api/database/top-users?period=${topUsersPeriod}`, {
+    const query = buildQuery({ period: topUsersPeriod, search: topUsersSearch, plan: topUsersPlan, sort: topUsersSort, limit: 100 });
+    setReportLoading(true);
+    authFetch(`${API_BASE}/api/database/top-users?${query}`, {
       headers: authHeaders,
     })
       .then((res) => res.ok ? res.json() : Promise.reject(res))
@@ -104,7 +142,8 @@ const AdminCrud = () => {
       .catch((err) => {
         console.error("Failed to fetch top users:", err);
         setTopUsers([]);
-      });
+      })
+      .finally(() => setReportLoading(false));
   };
 
   const loadRevenueSummary = () => {
@@ -135,7 +174,16 @@ const AdminCrud = () => {
   };
 
   const loadSubscriptionsReport = (status = subscriptionsFilter) => {
-    authFetch(`${API_BASE}/api/database/subscriptions-report?status=${status}`, {
+    const query = buildQuery({
+      status,
+      search: subscriptionsSearch,
+      plan: subscriptionsPlan,
+      expiring_days: subscriptionsExpiringDays,
+      sort: subscriptionsSort,
+      limit: 100,
+    });
+    setReportLoading(true);
+    authFetch(`${API_BASE}/api/database/subscriptions-report?${query}`, {
       headers: authHeaders,
     })
       .then((res) => res.ok ? res.json() : Promise.reject(res))
@@ -143,7 +191,8 @@ const AdminCrud = () => {
       .catch((err) => {
         console.error("Failed to fetch subscriptions report:", err);
         setSubscriptionsReport([]);
-      });
+      })
+      .finally(() => setReportLoading(false));
   };
 
   const loadSubscriptionAlerts = () => {
@@ -159,7 +208,9 @@ const AdminCrud = () => {
   };
 
   const loadPaymentsReport = (status = paymentsFilter) => {
-    authFetch(`${API_BASE}/api/database/payments-report?status=${status}`, {
+    const query = buildQuery({ status, search: paymentsSearch, plan: paymentsPlan, sort: paymentsSort, limit: 100 });
+    setReportLoading(true);
+    authFetch(`${API_BASE}/api/database/payments-report?${query}`, {
       headers: authHeaders,
     })
       .then((res) => res.ok ? res.json() : Promise.reject(res))
@@ -167,11 +218,27 @@ const AdminCrud = () => {
       .catch((err) => {
         console.error("Failed to fetch payments report:", err);
         setPaymentsReport([]);
-      });
+      })
+      .finally(() => setReportLoading(false));
+  };
+
+  const loadNotificationLogs = () => {
+    const query = buildQuery({ event_type: notificationType, search: notificationSearch, limit: 100 });
+    setReportLoading(true);
+    authFetch(`${API_BASE}/api/database/notification-logs?${query}`, {
+      headers: authHeaders,
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((payload) => setNotificationLogs(payload.items || []))
+      .catch((err) => {
+        console.error("Failed to fetch notification logs:", err);
+        setNotificationLogs([]);
+      })
+      .finally(() => setReportLoading(false));
   };
 
   const loadTableData = () => {
-    if (!selectedTable || selectedTable === OVERVIEW_KEY || selectedTable === TOP_SONGS_KEY || selectedTable === TOP_USERS_KEY || selectedTable === PAYMENTS_KEY || selectedTable === SUBSCRIPTIONS_KEY) return;
+    if (!selectedTable || selectedTable === OVERVIEW_KEY || selectedTable === TOP_SONGS_KEY || selectedTable === TOP_USERS_KEY || selectedTable === PAYMENTS_KEY || selectedTable === SUBSCRIPTIONS_KEY || selectedTable === NOTIFICATIONS_KEY) return;
 
     authFetch(`${API_BASE}/api/database/tables/${selectedTable}`, {
       headers: authHeaders,
@@ -221,6 +288,7 @@ const AdminCrud = () => {
     loadRevenueHistory();
     loadSubscriptionsReport("all");
     loadSubscriptionAlerts();
+    loadNotificationLogs();
   }, []);
 
   useEffect(() => {
@@ -245,6 +313,11 @@ const AdminCrud = () => {
       return;
     }
 
+    if (selectedTable === NOTIFICATIONS_KEY) {
+      loadNotificationLogs();
+      return;
+    }
+
     if (!selectedTable || selectedTable === OVERVIEW_KEY) return;
 
     loadTableData();
@@ -266,7 +339,27 @@ const AdminCrud = () => {
         setSchema([]);
         setPrimaryKey(null);
       });
-  }, [selectedTable, topSongsPeriod, topUsersPeriod, paymentsFilter, subscriptionsFilter]);
+  }, [
+    selectedTable,
+    topSongsPeriod,
+    topSongsSearch,
+    topSongsSort,
+    topUsersPeriod,
+    topUsersSearch,
+    topUsersPlan,
+    topUsersSort,
+    paymentsFilter,
+    paymentsSearch,
+    paymentsPlan,
+    paymentsSort,
+    subscriptionsFilter,
+    subscriptionsSearch,
+    subscriptionsPlan,
+    subscriptionsExpiringDays,
+    subscriptionsSort,
+    notificationType,
+    notificationSearch,
+  ]);
 
   const handleChange = (e, name) => {
     const schemaColumn = schema.find((col) => col.name === name);
@@ -404,6 +497,24 @@ const AdminCrud = () => {
   const totalPaymentStatuses = paymentStatusEntries.reduce((sum, item) => sum + item.value, 0) || 1;
   const maxRevenueHistory = Math.max(...revenueHistory.map((item) => item.revenue || 0), 1);
 
+  const renderReportToolbar = (children) => (
+    <div className="report-toolbar">
+      {children}
+      {reportLoading && <span className="report-loading">Loading...</span>}
+    </div>
+  );
+
+  const handleSubscriptionAction = async (subscriptionId, action) => {
+    await authFetch(`${API_BASE}/api/database/subscriptions/${subscriptionId}/${action}`, {
+      method: "POST",
+      headers: authHeaders,
+    });
+    loadSubscriptionsReport(subscriptionsFilter);
+    loadSubscriptionAlerts();
+    loadNotificationLogs();
+    loadOverview();
+  };
+
   const renderOverview = () => (
     <div className="overview">
       <h2>Overview</h2>
@@ -420,6 +531,9 @@ const AdminCrud = () => {
         <div className="card"><h3>Active Artists</h3><p>{dashboardMetrics.active_artists ?? "..."}</p></div>
         <div className="card"><h3>Inactive Artists</h3><p>{dashboardMetrics.inactive_artists ?? "..."}</p></div>
         <div className="card"><h3>Payments</h3><p>{dashboardMetrics.total_payments ?? "..."}</p></div>
+        <div className="card"><h3>Success Rate</h3><p>{dashboardMetrics.payment_success_rate ?? "..."}%</p></div>
+        <div className="card"><h3>Pending Rate</h3><p>{dashboardMetrics.payment_pending_rate ?? "..."}%</p></div>
+        <div className="card"><h3>Failed Rate</h3><p>{dashboardMetrics.payment_failed_rate ?? "..."}%</p></div>
         <div className="card"><h3>Pending Payments</h3><p>{dashboardMetrics.pending_payments ?? "..."}</p></div>
         <div className="card"><h3>Failed Payments</h3><p>{dashboardMetrics.failed_payments ?? "..."}</p></div>
         <div className="card"><h3>Revenue</h3><p>{dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue ?? "..."}</p></div>
@@ -603,6 +717,28 @@ const AdminCrud = () => {
         </div>
       </div>
 
+      {renderReportToolbar(
+        <>
+          <input
+            value={topSongsSearch}
+            onChange={(e) => setTopSongsSearch(e.target.value)}
+            placeholder="Search track or artist"
+          />
+          <select value={topSongsSort} onChange={(e) => setTopSongsSort(e.target.value)}>
+            <option value="plays_desc">Most played</option>
+            <option value="plays_asc">Least played</option>
+            <option value="track_asc">Track A-Z</option>
+            <option value="track_desc">Track Z-A</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => downloadCsv(`/api/database/top-songs/export?${buildQuery({ period: topSongsPeriod, search: topSongsSearch, sort: topSongsSort })}`, "top-songs.csv")}
+          >
+            Export CSV
+          </button>
+        </>
+      )}
+
       <div className="top-songs-hero">
         <div className="hero-card hero-card--primary">
           <span className="hero-label">Period</span>
@@ -693,6 +829,35 @@ const AdminCrud = () => {
         </div>
       </div>
 
+      {renderReportToolbar(
+        <>
+          <input
+            value={paymentsSearch}
+            onChange={(e) => setPaymentsSearch(e.target.value)}
+            placeholder="Search username or note"
+          />
+          <select value={paymentsPlan} onChange={(e) => setPaymentsPlan(e.target.value)}>
+            <option value="all">All plans</option>
+            <option value="free">Free</option>
+            <option value="premium">Premium</option>
+          </select>
+          <select value={paymentsSort} onChange={(e) => setPaymentsSort(e.target.value)}>
+            <option value="created_desc">Newest</option>
+            <option value="created_asc">Oldest</option>
+            <option value="amount_desc">Highest amount</option>
+            <option value="amount_asc">Lowest amount</option>
+            <option value="status_asc">Status A-Z</option>
+            <option value="status_desc">Status Z-A</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => downloadCsv(`/api/database/payments-report/export?${buildQuery({ status: paymentsFilter, search: paymentsSearch, plan: paymentsPlan, sort: paymentsSort })}`, "payments.csv")}
+          >
+            Export CSV
+          </button>
+        </>
+      )}
+
       <div className="top-songs-hero">
         <div className="hero-card hero-card--primary">
           <span className="hero-label">Current Filter</span>
@@ -771,6 +936,42 @@ const AdminCrud = () => {
         </div>
       </div>
 
+      {renderReportToolbar(
+        <>
+          <input
+            value={subscriptionsSearch}
+            onChange={(e) => setSubscriptionsSearch(e.target.value)}
+            placeholder="Search username"
+          />
+          <select value={subscriptionsPlan} onChange={(e) => setSubscriptionsPlan(e.target.value)}>
+            <option value="all">All plans</option>
+            <option value="free">Free</option>
+            <option value="premium">Premium</option>
+          </select>
+          <select value={subscriptionsExpiringDays} onChange={(e) => setSubscriptionsExpiringDays(e.target.value)}>
+            <option value="0">Any expiry</option>
+            <option value="3">Expires in 3 days</option>
+            <option value="7">Expires in 7 days</option>
+          </select>
+          <select value={subscriptionsSort} onChange={(e) => setSubscriptionsSort(e.target.value)}>
+            <option value="updated_desc">Recently updated</option>
+            <option value="updated_asc">Oldest update</option>
+            <option value="expires_asc">Expiry soonest</option>
+            <option value="expires_desc">Expiry latest</option>
+            <option value="username_asc">Username A-Z</option>
+            <option value="username_desc">Username Z-A</option>
+            <option value="status_asc">Status A-Z</option>
+            <option value="status_desc">Status Z-A</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => downloadCsv(`/api/database/subscriptions-report/export?${buildQuery({ status: subscriptionsFilter, search: subscriptionsSearch, plan: subscriptionsPlan, expiring_days: subscriptionsExpiringDays, sort: subscriptionsSort })}`, "subscriptions.csv")}
+          >
+            Export CSV
+          </button>
+        </>
+      )}
+
       <div className="top-songs-hero">
         <div className="hero-card hero-card--primary">
           <span className="hero-label">Current Filter</span>
@@ -820,11 +1021,12 @@ const AdminCrud = () => {
               <th>Started</th>
               <th>Expires</th>
               <th>Updated</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {subscriptionsReport.length === 0 ? (
-              <tr><td colSpan="7">No subscriptions found for this filter.</td></tr>
+              <tr><td colSpan="8">No subscriptions found for this filter.</td></tr>
             ) : (
               subscriptionsReport.map((subscription) => (
                 <tr key={subscription.id}>
@@ -835,6 +1037,11 @@ const AdminCrud = () => {
                   <td>{subscription.started_at || "-"}</td>
                   <td>{subscription.expires_at || "-"}</td>
                   <td>{subscription.updated_at || "-"}</td>
+                  <td>
+                    <button type="button" onClick={() => handleSubscriptionAction(subscription.id, "renew")}>Renew</button>
+                    <button type="button" onClick={() => handleSubscriptionAction(subscription.id, "toggle-auto-renew")}>Auto</button>
+                    <button type="button" onClick={() => handleSubscriptionAction(subscription.id, "cancel")}>Cancel</button>
+                  </td>
                 </tr>
               ))
             )}
@@ -864,6 +1071,35 @@ const AdminCrud = () => {
           ))}
         </div>
       </div>
+
+      {renderReportToolbar(
+        <>
+          <input
+            value={topUsersSearch}
+            onChange={(e) => setTopUsersSearch(e.target.value)}
+            placeholder="Search username"
+          />
+          <select value={topUsersPlan} onChange={(e) => setTopUsersPlan(e.target.value)}>
+            <option value="all">All plans</option>
+            <option value="free">Free</option>
+            <option value="premium">Premium</option>
+          </select>
+          <select value={topUsersSort} onChange={(e) => setTopUsersSort(e.target.value)}>
+            <option value="plays_desc">Most played</option>
+            <option value="plays_asc">Least played</option>
+            <option value="username_asc">Username A-Z</option>
+            <option value="username_desc">Username Z-A</option>
+            <option value="plan_asc">Plan A-Z</option>
+            <option value="plan_desc">Plan Z-A</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => downloadCsv(`/api/database/top-users/export?${buildQuery({ period: topUsersPeriod, search: topUsersSearch, plan: topUsersPlan, sort: topUsersSort })}`, "top-users.csv")}
+          >
+            Export CSV
+          </button>
+        </>
+      )}
 
       <div className="top-songs-hero">
         <div className="hero-card hero-card--primary">
@@ -925,6 +1161,68 @@ const AdminCrud = () => {
                   <td>{user.account_type}</td>
                   <td>{user.play_count}</td>
                   <td>{PERIOD_LABELS[topUsersPeriod]}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderNotificationLogs = () => (
+    <div className="overview">
+      <div className="report-header">
+        <div>
+          <h2>Notification Logs</h2>
+          <p className="report-subtitle">Internal operational history for payment, renewal, and subscription alerts.</p>
+        </div>
+      </div>
+
+      {renderReportToolbar(
+        <>
+          <input
+            value={notificationSearch}
+            onChange={(e) => setNotificationSearch(e.target.value)}
+            placeholder="Search user, title, or message"
+          />
+          <select value={notificationType} onChange={(e) => setNotificationType(e.target.value)}>
+            <option value="all">All events</option>
+            <option value="payment_paid">Payment paid</option>
+            <option value="payment_failed">Payment failed</option>
+            <option value="auto_renew">Auto-renew</option>
+            <option value="manual_renew">Manual renew</option>
+            <option value="admin_renew">Admin renew</option>
+            <option value="admin_cancel">Admin cancel</option>
+            <option value="admin_auto_renew_toggle">Auto-renew toggle</option>
+          </select>
+        </>
+      )}
+
+      <div className="data-table" style={{ overflowX: "auto", marginTop: "28px" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>User</th>
+              <th>Event</th>
+              <th>Title</th>
+              <th>Message</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {notificationLogs.length === 0 ? (
+              <tr><td colSpan="6">No notification history yet.</td></tr>
+            ) : (
+              notificationLogs.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.created_at || "-"}</td>
+                  <td>{item.username || "-"}</td>
+                  <td>{item.event_type}</td>
+                  <td>{item.title}</td>
+                  <td>{item.message}</td>
+                  <td>{item.status}</td>
                 </tr>
               ))
             )}
@@ -1044,6 +1342,12 @@ const AdminCrud = () => {
           >
             Subscriptions
           </li>
+          <li
+            className={selectedTable === NOTIFICATIONS_KEY ? "active" : ""}
+            onClick={() => setSelectedTable(NOTIFICATIONS_KEY)}
+          >
+            Notifications
+          </li>
           {tables.map((table) => (
             <li
               key={table}
@@ -1068,6 +1372,8 @@ const AdminCrud = () => {
               ? renderPaymentsReport()
             : selectedTable === SUBSCRIPTIONS_KEY
               ? renderSubscriptionsReport()
+            : selectedTable === NOTIFICATIONS_KEY
+              ? renderNotificationLogs()
             : selectedTable
               ? renderCrudTable()
               : <p>...</p>}

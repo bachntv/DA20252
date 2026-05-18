@@ -37,10 +37,10 @@ def ensure_admin(username: str = "admin", password: str = "admin", email: str = 
     hashed = hash_password(password)
     cur.execute(
       """
-      INSERT INTO users (id, username, email, hashed_password, birthdate, gender, roles)
-      VALUES (%s, %s, %s, %s, %s, %s, %s)
+      INSERT INTO users (id, username, email, hashed_password, birthdate, gender, roles, account_type)
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
       """,
-      (new_id, username, email, hashed, birthdate, None, 'admin')
+      (new_id, username, email, hashed, birthdate, None, 'admin', 'admin')
     )
     conn.commit()
     print(f"Inserted new admin user '{username}' with id {new_id}")

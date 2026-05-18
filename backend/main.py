@@ -15,6 +15,7 @@ from models.listening_history import ListeningHistory
 from models.plan import Plan
 from models.subscription import Subscription
 from models.payment import Payment
+from models.notification_log import NotificationLog
 from routes.auth_routes import router as auth_router
 from routes.music_routes import router as music_router
 from routes.user_routes import router as user_router

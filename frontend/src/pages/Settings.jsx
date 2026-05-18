@@ -13,6 +13,7 @@ const SettingsPage = () => {
   const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "" });
   const [billing, setBilling] = useState(null);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [billingAction, setBillingAction] = useState("");
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
@@ -89,6 +90,8 @@ const SettingsPage = () => {
   };
 
   const handleSubscribe = (planCode) => {
+    if (billingAction) return;
+    setBillingAction(`subscribe-${planCode}`);
     authFetch(`${API_BASE}/billing/subscribe`, {
       method: "POST",
       headers: {
@@ -105,10 +108,13 @@ const SettingsPage = () => {
         alert(`✅ ${data.message}`);
         loadBilling();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => alert(err.message))
+      .finally(() => setBillingAction(""));
   };
 
   const handleDowngrade = () => {
+    if (billingAction) return;
+    setBillingAction("downgrade");
     authFetch(`${API_BASE}/billing/cancel`, {
       method: "POST",
       headers: {
@@ -123,10 +129,13 @@ const SettingsPage = () => {
         alert(`✅ ${data.message}`);
         loadBilling();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => alert(err.message))
+      .finally(() => setBillingAction(""));
   };
 
   const handleConfirmPayment = (paymentId) => {
+    if (billingAction) return;
+    setBillingAction(`confirm-${paymentId}`);
     authFetch(`${API_BASE}/billing/confirm`, {
       method: "POST",
       headers: {
@@ -143,10 +152,13 @@ const SettingsPage = () => {
         alert(`Payment confirmed: ${data.message}`);
         loadBilling();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => alert(err.message))
+      .finally(() => setBillingAction(""));
   };
 
   const handleFailPayment = (paymentId) => {
+    if (billingAction) return;
+    setBillingAction(`fail-${paymentId}`);
     authFetch(`${API_BASE}/billing/fail`, {
       method: "POST",
       headers: {
@@ -163,10 +175,13 @@ const SettingsPage = () => {
         alert(`Payment updated: ${data.message}`);
         loadBilling();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => alert(err.message))
+      .finally(() => setBillingAction(""));
   };
 
   const handleRenewSubscription = () => {
+    if (billingAction) return;
+    setBillingAction("renew");
     authFetch(`${API_BASE}/billing/renew`, {
       method: "POST",
       headers: {
@@ -181,7 +196,8 @@ const SettingsPage = () => {
         alert(`Renewed: ${data.message}`);
         loadBilling();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => alert(err.message))
+      .finally(() => setBillingAction(""));
   };
 
   return (
@@ -304,11 +320,11 @@ const SettingsPage = () => {
                   )}
                   {billing.current_plan.plan.code !== "free" && (
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                      <button type="button" className="primary-button" onClick={handleRenewSubscription}>
-                        Renew Premium
+                      <button type="button" className="primary-button" disabled={!!billingAction} onClick={handleRenewSubscription}>
+                        {billingAction === "renew" ? "Renewing..." : "Renew Premium"}
                       </button>
-                      <button type="button" className="secondary-button" onClick={handleDowngrade}>
-                        Downgrade to Free
+                      <button type="button" className="secondary-button" disabled={!!billingAction} onClick={handleDowngrade}>
+                        {billingAction === "downgrade" ? "Updating..." : "Downgrade to Free"}
                       </button>
                     </div>
                   )}
@@ -343,10 +359,10 @@ const SettingsPage = () => {
                       <button
                         type="button"
                         className="primary-button"
-                        disabled={billing.current_plan.plan.code === plan.code}
+                        disabled={billing.current_plan.plan.code === plan.code || !!billingAction}
                         onClick={() => handleSubscribe(plan.code)}
                       >
-                        {billing.current_plan.plan.code === plan.code ? "Current Plan" : `Choose ${plan.name}`}
+                        {billingAction === `subscribe-${plan.code}` ? "Submitting..." : billing.current_plan.plan.code === plan.code ? "Current Plan" : `Choose ${plan.name}`}
                       </button>
                     </div>
                   ))}
@@ -376,16 +392,18 @@ const SettingsPage = () => {
                             <button
                               type="button"
                               className="primary-button"
+                              disabled={!!billingAction}
                               onClick={() => handleConfirmPayment(payment.id)}
                             >
-                              Confirm Payment
+                              {billingAction === `confirm-${payment.id}` ? "Confirming..." : "Confirm Payment"}
                             </button>
                             <button
                               type="button"
                               className="secondary-button"
+                              disabled={!!billingAction}
                               onClick={() => handleFailPayment(payment.id)}
                             >
-                              Mark Failed
+                              {billingAction === `fail-${payment.id}` ? "Updating..." : "Mark Failed"}
                             </button>
                           </div>
                         )}

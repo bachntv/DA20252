@@ -117,6 +117,28 @@
 - Mock notification handling:
   - admin-facing expiring-subscription alert cards
   - notification preview text for simulated email/internal reminder
+- Admin search/filter/sort:
+  - Top Songs: search track/artist, sort by plays/title
+  - Top Users: search username, filter plan, sort by plays/user/plan
+  - Payments: search username/note, filter status/plan, sort by date/amount/status
+  - Subscriptions: search username, filter status/plan/expiry window, sort by update/expiry/user/status
+- CSV export:
+  - Top Songs
+  - Top Users
+  - Payments
+  - Subscriptions
+- Notification log:
+  - `notification_logs` table
+  - admin notification history view
+  - payment/renewal/admin subscription event logging
+- Subscription admin actions:
+  - manual renew
+  - cancel subscription
+  - toggle auto-renew
+- Payment KPIs:
+  - success rate
+  - pending rate
+  - failed rate
 
 ## 5. Status Management Added
 
@@ -163,6 +185,19 @@ Behavior:
 - `PROJECT_STATUS.md`
 
 ## 7. Important Runtime Notes
+
+### Dataset recovery
+
+- Local metadata CSV lives at `backend/data/dataset.csv`
+- If PostgreSQL tables are empty after Docker volume/container recovery, re-import metadata:
+
+```powershell
+cd "C:\code\20252 da\backend"
+& "C:\code\20252 da\.venv\Scripts\python.exe" scripts\import_tracks.py
+```
+
+- This restores `songs`, `albums`, `artists`, and `album_artists`
+- This does not restore MinIO mp3 objects; if the `music` bucket is missing/empty, audio files must be uploaded again for playback
 
 ### Standard startup
 From repo root:

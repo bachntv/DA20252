@@ -5,6 +5,7 @@ from models.plan import Plan
 from models.subscription import Subscription
 from models.payment import Payment
 from models.user import User
+from utils.notifications import log_notification
 
 
 DEFAULT_PLANS = [
@@ -103,6 +104,13 @@ def ensure_user_has_subscription(db: Session, user: User) -> Subscription:
                 amount=plan.price_monthly,
                 provider="auto-renew",
                 note=f"Auto-renewed {plan.name} for 30 more days",
+            )
+            log_notification(
+                db,
+                user_id=user.id,
+                event_type="auto_renew",
+                title="Subscription auto-renewed",
+                message=f"{plan.name} was auto-renewed for 30 more days.",
             )
             db.commit()
             db.refresh(current)
@@ -266,6 +274,13 @@ def confirm_payment(db: Session, user: User, payment_id: str):
     payment.status = "paid"
     payment.note = f"Subscribed to {plan.name}"
     payment.updated_at = datetime.utcnow()
+    log_notification(
+        db,
+        user_id=user.id,
+        event_type="payment_paid",
+        title="Payment confirmed",
+        message=f"Payment for {plan.name} was confirmed successfully.",
+    )
 
     db.commit()
     db.refresh(pending_subscription)
@@ -297,6 +312,13 @@ def fail_payment(db: Session, user: User, payment_id: str):
     payment.status = "failed"
     payment.note = "Payment failed or was cancelled by the user"
     payment.updated_at = datetime.utcnow()
+    log_notification(
+        db,
+        user_id=user.id,
+        event_type="payment_failed",
+        title="Payment failed",
+        message="A pending payment was marked as failed.",
+    )
 
     db.commit()
     db.refresh(payment)
@@ -333,6 +355,13 @@ def renew_subscription(db: Session, user: User, payment_method: str = "manual"):
         amount=plan.price_monthly,
         provider=payment_method or "manual",
         note=f"Manual renewal for {plan.name}",
+    )
+    log_notification(
+        db,
+        user_id=user.id,
+        event_type="manual_renew",
+        title="Subscription renewed",
+        message=f"{plan.name} was manually renewed for 30 more days.",
     )
     db.commit()
     db.refresh(current)

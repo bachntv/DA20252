@@ -16,6 +16,11 @@ from minio import Minio
 from yt_dlp import YoutubeDL
 import tempfile
 
+try:
+    import imageio_ffmpeg
+except ImportError:
+    imageio_ffmpeg = None
+
 # Load environment variables from backend/.env
 load_dotenv(override=True)
 
@@ -112,6 +117,9 @@ def download_mp3(track_name: str, output_dir: str) -> str:
         }],
         'keepvideo': False,
     }
+
+    if imageio_ffmpeg:
+        ydl_opts['ffmpeg_location'] = imageio_ffmpeg.get_ffmpeg_exe()
     
     # Add cookies if available
     if cookies_exists:
