@@ -16,10 +16,12 @@ from models.plan import Plan
 from models.subscription import Subscription
 from models.payment import Payment
 from models.notification_log import NotificationLog
+from models.social import SocialComment, SocialFollow, SocialLike, SocialPost, SocialShare
 from routes.auth_routes import router as auth_router
 from routes.music_routes import router as music_router
 from routes.user_routes import router as user_router
 from routes.table_routes import router as database_router
+from routes.social_routes import router as social_router
 from utils.billing import ensure_default_plans
 from models.base import SessionLocal
 
@@ -46,6 +48,7 @@ with engine.begin() as conn:
     conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
     conn.execute(text("ALTER TABLE artists ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
     conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()"))
+    conn.execute(text("ALTER TABLE songs ADD COLUMN IF NOT EXISTS lyrics TEXT"))
 
 db = SessionLocal()
 try:
@@ -57,6 +60,7 @@ app.include_router(auth_router, prefix="/api/auth")
 app.include_router(music_router, prefix="/api/music")
 app.include_router(user_router, prefix="/api/user")
 app.include_router(database_router, prefix="/api/database")
+app.include_router(social_router, prefix="/api/social")
 
 @app.get("/")
 def root():

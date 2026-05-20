@@ -11,6 +11,7 @@ import PlaylistPage from "./components/MainContent/PlaylistPage";
 import AlbumPage from "./components/MainContent/AlbumPage";
 import ArtistPage from "./components/MainContent/ArtistPage";
 import SearchPage from "./components/MainContent/SearchPage";
+import SocialFeed from "./components/MainContent/SocialFeed";
 import AdminCrud from "./pages/AdminCrud";
 import SettingsPage from "./pages/Settings";
 
@@ -30,6 +31,7 @@ function App() {
             <Route path="album/:albumId" element={<AlbumPage />} />
             <Route path="artist/:artistId" element={<ArtistPage />} />
             <Route path="search" element={<SearchPage />} />
+            <Route path="social" element={<SocialFeed />} />
           </Route>
 
           {/* ✅ Full-page route for /database, still protected */}

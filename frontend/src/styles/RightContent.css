@@ -72,6 +72,57 @@
   margin-bottom: 12px;
 }
 
+.lyrics-section {
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  padding: 14px 0;
+  margin-bottom: 16px;
+}
+
+.lyrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.lyrics-header h4 {
+  margin: 0;
+}
+
+.lyrics-header button {
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lyrics-section textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 10px;
+  font: inherit;
+}
+
+.lyrics-text {
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  font-size: 13px;
+  max-height: 190px;
+  overflow-y: auto;
+  margin: 0;
+}
+
 .video-card {
   display: flex;
   align-items: center;

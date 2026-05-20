@@ -9,6 +9,26 @@
   min-height: 100%;
 }
 
+.artist-page {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--artist-accent) 42%, transparent) 0, transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--artist-accent-alt) 24%, transparent), rgba(255, 255, 255, 0.08) 45%, transparent 100%);
+}
+
+.artist-page .playlist-header {
+  align-items: center;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow: var(--shadow-md);
+}
+
+.artist-page .playlist-cover {
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.72);
+}
+
 .playlist-header {
   display: flex;
   align-items: flex-end;

@@ -7,6 +7,7 @@ import "../../styles/MainContent/PlaylistPage.css";
 import SkeletonLoader from "../SkeletonLoader";
 import { authFetch } from '../../utils/authFetch';
 import { updateLastPlayed } from '../../utils/lastPlayed';
+import { createArtistArtwork, createTrackArtwork, getArtistArtwork, getArtworkPalette, getTrackArtwork } from "../../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -234,15 +235,22 @@ const ArtistPage = () => {
   if (!artist) return <SkeletonLoader/>;
 
   const isCurrentArtistPlaying = artist.tracks.some((t) => t.id === currentSong?.id) && isPlaying;
+  const [artistAccent, artistAccentAlt] = getArtworkPalette(artist.id || artist.name);
 
   return (
-    <div className="playlist-page">
+    <div
+      className="playlist-page artist-page"
+      style={{
+        "--artist-accent": artistAccent,
+        "--artist-accent-alt": artistAccentAlt,
+      }}
+    >
       <div className="playlist-header">
         <img 
-          src={artist.image || "/default_cover.png"} 
+          src={getArtistArtwork(artist)}
           alt={artist.name} 
           className="playlist-cover" 
-          onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+          onError={(e) => { e.target.onerror = null; e.target.src = createArtistArtwork(artist); }}
         />
         <div className="playlist-info">
           <span className="playlist-label">Artist</span>
@@ -304,10 +312,10 @@ const ArtistPage = () => {
                 </td>
                 <td className="track-title-cell col-date">
                   <img 
-                    src={track.image_url || "/default_cover.png"} 
+                    src={getTrackArtwork(track)}
                     alt={track.track_name} 
                     className="track-image" 
-                    onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(track); }}
                   />
                   <div className="track-info">
                     <p className="track-title">{track.track_name}</p>

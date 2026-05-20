@@ -1,0 +1,275 @@
+.social-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 20px;
+  padding: 24px;
+  color: var(--text-primary);
+}
+
+.social-feed,
+.follow-panel,
+.composer,
+.post-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.social-feed {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.social-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.social-topbar h2,
+.follow-panel h3 {
+  margin: 0;
+}
+
+.scope-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.scope-toggle button,
+.composer-actions button,
+.comment-input button,
+.user-row button {
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  padding: 9px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.scope-toggle button.active,
+.composer-actions button {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+.composer {
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 12px;
+  font: inherit;
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.composer-actions label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.post-card {
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.post-header,
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.post-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: var(--text-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.post-header span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.shared-label {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.post-content {
+  margin: 14px 0;
+  line-height: 1.5;
+}
+
+.social-track {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.26);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.social-track img {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.social-track p {
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+
+.social-track span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.post-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.post-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: var(--radius-full);
+}
+
+.post-actions button:hover,
+.post-actions button.active {
+  background: rgba(168, 230, 207, 0.2);
+  color: var(--text-primary);
+}
+
+.share-row input,
+.comment-input input,
+.follow-panel input {
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 10px 12px;
+}
+
+.share-row {
+  margin: 4px 0 12px;
+}
+
+.comments {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+}
+
+.comment {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.comment span {
+  color: var(--text-secondary);
+}
+
+.comment-input {
+  display: flex;
+  gap: 8px;
+}
+
+.comment-input button {
+  flex: 0 0 auto;
+}
+
+.follow-panel {
+  padding: 16px;
+  height: fit-content;
+  position: sticky;
+  top: 12px;
+}
+
+.follow-panel input {
+  margin: 14px 0;
+}
+
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-row span {
+  flex: 1;
+  font-weight: 700;
+}
+
+.user-row button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.social-empty {
+  padding: 28px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .social-page {
+    grid-template-columns: 1fr;
+  }
+
+  .follow-panel {
+    position: static;
+  }
+}

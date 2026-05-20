@@ -6,6 +6,7 @@ import { FaPlay } from "react-icons/fa";
 import { usePlayer } from "../../context/PlayerContext";
 import { authFetch } from '../../utils/authFetch';
 import { updateLastPlayed } from '../../utils/lastPlayed';
+import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -338,10 +339,10 @@ const PlaylistPage = () => {
                 </td>
                 <td className="track-title-cell col-date">
                   <img 
-                    src={track.image_url || "/default_cover.png"} 
+                    src={getTrackArtwork(track)}
                     alt={track.track_name} 
                     className="track-image" 
-                    onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(track); }}
                   />
                   <div className="track-info">
                     <p className="track-title">{track.track_name}</p>

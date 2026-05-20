@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
 import "../styles/RightContent.css";
-import { FaPlay, FaPause, FaStepForward, FaStepBackward, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
 import { usePlayer } from "../context/PlayerContext";
 import { FaTimes } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
 import { authFetch } from '../utils/authFetch';
+import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -17,7 +17,9 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
   const token = localStorage.getItem("token");
   const userId = token ? jwtDecode(token)?.sub : null;
   const { playSong, queue, setQueue, isPlaying, removeFromQueue } = usePlayer();
-  const [likedTrackIds, setLikedTrackIds] = useState([]);
+  const [lyrics, setLyrics] = useState("");
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
+  const [lyricsDraft, setLyricsDraft] = useState("");
 
   const fetchMp3Url = async (trackName) => {
     try {
@@ -64,6 +66,41 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
 
     fetchRelated();
   }, [currentSong]);
+
+  useEffect(() => {
+    if (!currentSong?.id) return;
+
+    const fetchLyrics = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`);
+        const data = await res.json();
+        setLyrics(data.lyrics || "");
+        setLyricsDraft(data.lyrics || "");
+        setIsEditingLyrics(false);
+      } catch (err) {
+        setLyrics("");
+        setLyricsDraft("");
+      }
+    };
+
+    fetchLyrics();
+  }, [currentSong?.id]);
+
+  const saveLyrics = async () => {
+    if (!currentSong?.id) return;
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lyrics: lyricsDraft }),
+      });
+      const data = await res.json();
+      setLyrics(data.lyrics || "");
+      setIsEditingLyrics(false);
+    } catch (err) {
+      console.error("Failed to save lyrics", err);
+    }
+  };
 
   useEffect(() => {
     const fetchUserPlaylists = async () => {
@@ -138,33 +175,6 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
     }
   };
 
-  const toggleLike = async (trackId) => {
-    const isLiked = likedTrackIds.includes(trackId);
-    setLikedTrackIds((prev) =>
-      isLiked ? prev.filter((id) => id !== trackId) : [...prev, trackId]
-    );
-
-    try {
-      const method = isLiked ? "DELETE" : "POST";
-      await authFetch(`${API_BASE}/api/music/user/liked_track`, {
-        method,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {
-      setLikedTrackIds((prev) =>
-        isLiked ? [...prev, trackId] : prev.filter((id) => id !== trackId)
-      );
-    }
-  };
-
-  useEffect(() => {
-    if (!userId) return;
-    authFetch(`${API_BASE}/api/music/user/liked_track`)
-      .then((res) => res.json())
-      .then(setLikedTrackIds)
-      .catch(console.error);
-  }, [userId]);
-
   if (!currentSong) return null;
 
   const renderQueueList = () => (
@@ -175,11 +185,11 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
           queue.slice(0, 10).map((track, index) => (
             <div key={`${track.id}-${index}`} className="video-card">
               <img
-                src={track.cover_url || track.image_url || "/default_cover.png"}
+                src={getTrackArtwork(track)}
                 alt={track.title}
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = "/default_cover.png";
+                  e.target.src = createTrackArtwork(track);
                 }}
               />
               <div className="track-info">
@@ -215,25 +225,42 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
     <aside className="right-content-cover">
       <img
         className="cover-image"
-        src={currentSong.image_url || currentSong.cover_url || "/default_cover.png"}
+        src={getTrackArtwork(currentSong)}
         alt={currentSong.track_name || currentSong.title}
-        onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+        onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(currentSong); }}
       />
       <div className="overlay-content">
         <h1 className="song-title">{currentSong.track_name || currentSong.title}</h1>
         <p className="song-artist">{currentSong.artist_name || currentSong.artist}</p>
 
         <div className="related-section">
+          <div className="lyrics-section">
+            <div className="lyrics-header">
+              <h4>Lyrics</h4>
+              <button onClick={() => (isEditingLyrics ? saveLyrics() : setIsEditingLyrics(true))}>
+                {isEditingLyrics ? "Save" : "Edit"}
+              </button>
+            </div>
+            {isEditingLyrics ? (
+              <textarea
+                value={lyricsDraft}
+                onChange={(e) => setLyricsDraft(e.target.value)}
+                placeholder="Add lyrics for this song"
+              />
+            ) : (
+              <p className="lyrics-text">{lyrics || "No lyrics added yet."}</p>
+            )}
+          </div>
           <h4>Related Music</h4>
           {relatedSongs.length > 0 ? (
             relatedSongs.map((track) => (
               <div key={track.id} className="video-card">
                 <img
-                  src={track.cover_url || "/default_cover.png"}
+                  src={getTrackArtwork(track)}
                   alt={track.title}
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = "/default_cover.png";
+                    e.target.src = createTrackArtwork(track);
                   }}
                 />
                 <div className="track-info">

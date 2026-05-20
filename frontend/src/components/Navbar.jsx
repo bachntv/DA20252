@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import "../styles/Navbar.css";
-import { FaBell, FaUserCircle, FaChevronDown, FaHome, FaSearch, FaMicrophone } from "react-icons/fa";
+import { FaBell, FaUserCircle, FaChevronDown, FaHome, FaUsers } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode"; 
 import { authFetch } from "../utils/authFetch";
@@ -10,12 +10,15 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 const Navbar = ({ username, profilePicture }) => {
   const location = useLocation();
   const [showMenu, setShowMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchType, setSearchType] = useState("Track");
   const [searchTerm, setSearchTerm] = useState("");
   const [roles, setRoles] = useState([]); 
 
   const menuRef = useRef();
+  const notificationRef = useRef();
   const dropdownRef = useRef();
   const debounceRef = useRef(null);
   const navigate = useNavigate();
@@ -44,6 +47,7 @@ const Navbar = ({ username, profilePicture }) => {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
+      if (notificationRef.current && !notificationRef.current.contains(e.target)) setShowNotifications(false);
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setShowDropdown(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -100,6 +104,32 @@ const Navbar = ({ username, profilePicture }) => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/notifications`);
+      const data = await res.json();
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch notifications", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const timer = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const openNotifications = async () => {
+    const next = !showNotifications;
+    setShowNotifications(next);
+    if (next) {
+      await fetchNotifications();
+      await authFetch(`${API_BASE}/api/social/notifications/read`, { method: "POST" });
+      setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+    }
+  };
+
   const handleEmotionClick = (type) => {
     setShowDropdown(false);
     setSearchType(type);
@@ -111,6 +141,9 @@ const Navbar = ({ username, profilePicture }) => {
   <img src="/my-logo.png" alt="App Logo" className="app-logo" />
   <button className="home-b" onClick={() => navigate("/")}>
     <FaHome />
+  </button>
+  <button className="home-b" onClick={() => navigate("/social")} title="Social Feed">
+    <FaUsers />
   </button>
 </div>
 
@@ -166,7 +199,26 @@ const Navbar = ({ username, profilePicture }) => {
       </div>
 
       <div className="nav-right">
-        {/* <FaBell className="nav-icon" /> */}
+        <div className="notification-wrapper" ref={notificationRef}>
+          <button className="notification-button" onClick={openNotifications} title="Notifications">
+            <FaBell />
+            {notifications.some((item) => !item.is_read) && <span className="notification-dot" />}
+          </button>
+          <div className={`notification-menu ${showNotifications ? "show" : ""}`}>
+            <h4>Notifications</h4>
+            {notifications.length === 0 ? (
+              <p className="notification-empty">No notifications</p>
+            ) : (
+              notifications.map((item) => (
+                <div className="notification-item" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <span>{item.message}</span>
+                  <small>{new Date(item.created_at).toLocaleString()}</small>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
         <div
           className="profile-wrapper"
           ref={menuRef}

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode";
 import "../../styles/MainContent/RecommendSongs.css";
 import { usePlayer } from "../../context/PlayerContext";
 import { authFetch } from '../../utils/authFetch';
+import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -10,7 +10,7 @@ const RecommendSongs = ({ title }) => {
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { queue, setQueue, playSong } = usePlayer();
+  const { playSong } = usePlayer();
 
   const fetchMp3Url = async (trackName) => {
     try {
@@ -58,8 +58,6 @@ const RecommendSongs = ({ title }) => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const userId = jwtDecode(token).sub;
-
     const fetchRecommendations = async () => {
       setLoading(true);
       setError(null);
@@ -103,9 +101,9 @@ const RecommendSongs = ({ title }) => {
                 title="Click to play this song"
               >
                 <img
-                  src={item.cover_url || "/default_cover.png"}
+                  src={getTrackArtwork(item)}
                   alt={item.title}
-                  onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(item); }}
                 />
                 <p className="title">{item.title}</p>
                 <p className="subtitle">{item.artist}</p>

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   FaPlay, FaPause, FaStepForward, FaStepBackward, FaVolumeUp, FaVolumeMute,
-  FaExpand, FaPlus, FaHeart, FaRegHeart, FaList
+  FaPlus, FaHeart, FaRegHeart, FaList
 } from "react-icons/fa";
 import "../styles/MusicPlayer.css";
+import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
 
 const formatTime = (seconds) => {
   if (isNaN(seconds)) return "0:00";
@@ -100,8 +101,13 @@ const MusicPlayer = ({
       <div className="player-left">
         <img
           className="song-cover"
-          src={currentSong?.image_url || currentSong?.cover_url || "/default_cover.png"}
+          src={currentSong ? getTrackArtwork(currentSong) : "/default_cover.png"}
           alt="cover"
+          onError={(e) => {
+            if (!currentSong) return;
+            e.target.onerror = null;
+            e.target.src = createTrackArtwork(currentSong);
+          }}
         />
         <div className="song-info">
           <p className="title">{currentSong?.track_name || currentSong?.title || "No song playing"}</p>

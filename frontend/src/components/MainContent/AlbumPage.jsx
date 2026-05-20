@@ -7,6 +7,7 @@ import { jwtDecode } from "jwt-decode";
 import SkeletonLoader from "../SkeletonLoader";
 import { authFetch } from '../../utils/authFetch';
 import { updateLastPlayed } from '../../utils/lastPlayed';
+import { createAlbumArtwork, createTrackArtwork, getAlbumArtwork, getTrackArtwork } from "../../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -245,10 +246,10 @@ const AlbumPage = () => {
     <div className="playlist-page">
       <div className="playlist-header">
         <img 
-          src={album.image || "/default_cover.png"} 
+          src={getAlbumArtwork(album)}
           alt={album.name} 
           className="playlist-cover" 
-          onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+          onError={(e) => { e.target.onerror = null; e.target.src = createAlbumArtwork(album); }}
         />
         <div className="playlist-info">
           <span className="playlist-label">Album</span>
@@ -320,10 +321,10 @@ const AlbumPage = () => {
                 </td>
                 <td className="track-title-cell col-date">
                   <img 
-                    src={track.image_url || "/default_cover.png"} 
+                    src={getTrackArtwork(track)}
                     alt={track.track_name} 
                     className="track-image" 
-                    onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                    onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(track); }}
                   />
                   <div className="track-info">
                     <p className="track-title">{track.track_name}</p>

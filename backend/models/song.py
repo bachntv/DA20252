@@ -25,4 +25,5 @@ class Song(Base):
     artist_id = Column(String, primary_key=True)
     album_id = Column(String)
     track_image_url = Column(String)
+    lyrics = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)

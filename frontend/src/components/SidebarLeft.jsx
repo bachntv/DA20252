@@ -4,6 +4,7 @@ import { FaPlus, FaAngleRight, FaAngleLeft, FaSearch, FaChevronDown} from "react
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import { formatDistanceToNow } from "date-fns";
+import { createAlbumArtwork, createArtistArtwork } from "../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -90,7 +91,11 @@ const SidebarLeft = () => {
             name,
             type: item.type,
             owner,
-            image: image || "/default_cover.jpg",
+            image:
+              image ||
+              (item.type === "artist"
+                ? createArtistArtwork({ id: item.id, name })
+                : createAlbumArtwork({ id: item.id, name, artist_name: owner })),
             created_at: item.created_at,
             last_played: item.last_played,
           };

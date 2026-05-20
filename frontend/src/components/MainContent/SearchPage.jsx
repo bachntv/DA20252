@@ -6,7 +6,14 @@ import { usePlayer } from "../../context/PlayerContext";
 import "../../styles/MainContent/PlaylistPage.css";
 import { jwtDecode } from "jwt-decode";
 import { authFetch } from '../../utils/authFetch';
-import { Link } from "react-router-dom";
+import {
+  createAlbumArtwork,
+  createArtistArtwork,
+  createTrackArtwork,
+  getAlbumArtwork,
+  getArtistArtwork,
+  getTrackArtwork,
+} from "../../utils/artwork";
 
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
@@ -383,10 +390,10 @@ useEffect(() => {
                             </td>
                             <td className="track-title-cell col-date">
                               <img 
-                                src={track.cover_url || "/default_cover.png"} 
+                                src={getTrackArtwork(track)}
                                 alt={track.title} 
                                 className="track-image" 
-                                onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                                onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(track); }}
                               />
                               <div className="track-info">
                                 <p className="track-title">{track.title}</p>
@@ -526,10 +533,10 @@ useEffect(() => {
                     </td>
                     <td className="track-title-cell col-date">
                       <img 
-                        src={track.cover_url || "/default_cover.png"} 
+                        src={getTrackArtwork(track)}
                         alt={track.title} 
                         className="track-image" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                        onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(track); }}
                       />
                       <div className="track-info">
                         <p className="track-title">{track.title}</p>
@@ -615,12 +622,12 @@ useEffect(() => {
             {results.map((album) => (
               <div key={album.id} className="album-card">
                 <img 
-                  src={album.cover_image_url || "/default_cover.png"} 
+                  src={getAlbumArtwork(album)}
                   alt={album.name} 
                   className="album-cover" 
                   onClick={() => navigate(`/album/${album.id}`)}
                   style={{cursor: 'pointer'}}
-                  onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = createAlbumArtwork(album); }}
                 />
                 <span className="album-title">
                   <button 
@@ -649,12 +656,12 @@ useEffect(() => {
             {results.map((artist) => (
               <div key={artist.id} className="artist-card">
                 <img 
-                  src={artist.profile_image_url || "/default_cover.png"} 
+                  src={getArtistArtwork(artist)}
                   alt={artist.name} 
                   className="artist-cover" 
                   onClick={() => navigate(`/artist/${artist.id}`)}
                   style={{cursor: 'pointer'}}
-                  onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = createArtistArtwork(artist); }}
                 />
                 <span className="artist-name">
                   <button 
