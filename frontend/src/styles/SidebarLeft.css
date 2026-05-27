@@ -597,3 +597,9 @@
 .custom-file-upload input[type="file"] {
   display: none;
 }
+
+.library-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 18px 14px;
+}

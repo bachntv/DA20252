@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useRef} from "react";
+import React, {useEffect, useState, useRef, useCallback} from "react";
 import "../styles/SidebarLeft.css";
 import { FaPlus, FaAngleRight, FaAngleLeft, FaSearch, FaChevronDown} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
 const SidebarLeft = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
   const [expanded, setExpanded] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearchBox, setShowSearchBox] = useState(false);
@@ -36,9 +37,13 @@ const SidebarLeft = () => {
     }
   };
 
-  const fetchPlaylists = async () => {
+  const fetchPlaylists = useCallback(async () => {
+    if (!token) {
+      setComponents([]);
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("token");
       const res = await authFetch(`${API_BASE}/api/music/user_playlist`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -106,11 +111,11 @@ const SidebarLeft = () => {
     } catch (err) {
       console.error("Error loading playlists:", err);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchPlaylists();
-  }, []);
+  }, [fetchPlaylists]);
 
   useEffect(() => {
     const handlePlaylistUpdate = () => {
@@ -133,7 +138,7 @@ const SidebarLeft = () => {
       window.removeEventListener('artistUpdated', handleArtistUpdated);
       window.removeEventListener('albumUpdated', handleAlbumUpdated);
     };
-  }, []);
+  }, [fetchPlaylists]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -193,6 +198,11 @@ const SidebarLeft = () => {
   });
 
   const handleCreatePlaylist = async () => {
+    if (!token) {
+      navigate("/signin");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("name", newPlaylist.name);
     formData.append("description", newPlaylist.description || "");
@@ -231,7 +241,7 @@ const SidebarLeft = () => {
       <div className={"library-header"}>
         <h2>Your Library</h2>
         <div className="header-actions">
-          <button className="create-button" onClick={() => setShowCreateForm(true)}>
+          <button className="create-button" onClick={() => token ? setShowCreateForm(true) : navigate("/signin")}>
             <FaPlus />
             <span>Create</span>
           </button>
@@ -341,7 +351,10 @@ const SidebarLeft = () => {
             <span>Played</span>
           </div>
           <div className="library-table-body">
-            {filteredComponents.map((item, index) => (
+            {!token && (
+              <div className="library-empty">Log in to see your library.</div>
+            )}
+            {token && filteredComponents.map((item, index) => (
               <div 
                 className="library-row" 
                 key={index}
@@ -435,7 +448,10 @@ const SidebarLeft = () => {
             </div>
           </div>
           <div className="playlist-list">
-            {filteredComponents.map((item, index) => (
+            {!token && (
+              <div className="library-empty">Log in to see your library.</div>
+            )}
+            {token && filteredComponents.map((item, index) => (
               <div 
                 className="playlist-row" 
                 key={index} 

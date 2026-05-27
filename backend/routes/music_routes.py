@@ -1125,6 +1125,62 @@ def get_related_songs(track_id: str, db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/featured", response_model=List[TrackResponse])
+def get_featured_songs(db: Session = Depends(get_db)):
+    rows = db.execute(text("""
+        SELECT s.track_id, s.track_name, at.id AS artist_id, at.name AS artist_name,
+               ab.id AS album_id, ab.name AS album_name,
+               s.duration_ms, s.track_image_url
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+        ORDER BY RANDOM()
+        LIMIT 15
+    """)).fetchall()
+
+    track_map = defaultdict(lambda: {
+        "id": None,
+        "title": None,
+        "artist_id": set(),
+        "artists": set(),
+        "album_id": None,
+        "album": None,
+        "duration": None,
+        "cover_url": None,
+        "date_added": None,
+    })
+
+    for row in rows:
+        track_id = row[0]
+        track = track_map[track_id]
+        track["id"] = track_id
+        track["title"] = row[1]
+        track["artist_id"].add(row[2])
+        track["artists"].add(row[3])
+        track["album_id"] = row[4]
+        track["album"] = row[5]
+        track["duration"] = format_duration(row[6])
+        track["cover_url"] = row[7]
+
+    return [
+        TrackResponse(
+            id=track["id"],
+            title=track["title"],
+            artist_id=", ".join(sorted(track["artist_id"])),
+            artist=", ".join(sorted(track["artists"])),
+            album_id=track["album_id"],
+            album=track["album"],
+            duration=track["duration"],
+            cover_url=track["cover_url"],
+            date_added=None
+        )
+        for track in track_map.values()
+    ]
+
+
 @router.get("/recommendations", response_model=List[TrackResponse])
 def get_recommendations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = current_user.id

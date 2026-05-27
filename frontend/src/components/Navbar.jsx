@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/Navbar.css";
-import { FaBell, FaUserCircle, FaChevronDown, FaHome, FaUsers } from "react-icons/fa";
+import { FaBell, FaChevronDown, FaHome, FaUsers } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode"; 
 import { authFetch } from "../utils/authFetch";
@@ -9,6 +9,8 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
 const Navbar = ({ username, profilePicture }) => {
   const location = useLocation();
+  const token = localStorage.getItem("token");
+  const isAuthenticated = Boolean(token);
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -26,7 +28,6 @@ const Navbar = ({ username, profilePicture }) => {
   const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "";
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
     if (token) {
       try {
         const decoded = jwtDecode(token);
@@ -36,7 +37,7 @@ const Navbar = ({ username, profilePicture }) => {
         console.error("Invalid token", err);
       }
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (!location.pathname.includes("/search")) {
@@ -69,11 +70,12 @@ const Navbar = ({ username, profilePicture }) => {
   const handleSignOut = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
+    localStorage.removeItem("user");
     fetch(`${API_BASE}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
     });
-    window.location.href = "/signin";
+    window.location.href = "/";
   };
 
   const handleDropdownClick = (type) => {
@@ -104,7 +106,12 @@ const Navbar = ({ username, profilePicture }) => {
     }
   };
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      return;
+    }
+
     try {
       const res = await authFetch(`${API_BASE}/api/social/notifications`);
       const data = await res.json();
@@ -112,15 +119,21 @@ const Navbar = ({ username, profilePicture }) => {
     } catch (err) {
       console.error("Failed to fetch notifications", err);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchNotifications();
     const timer = setInterval(fetchNotifications, 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [fetchNotifications, isAuthenticated]);
 
   const openNotifications = async () => {
+    if (!isAuthenticated) {
+      navigate("/signin");
+      return;
+    }
+
     const next = !showNotifications;
     setShowNotifications(next);
     if (next) {
@@ -199,6 +212,7 @@ const Navbar = ({ username, profilePicture }) => {
       </div>
 
       <div className="nav-right">
+        {isAuthenticated && (
         <div className="notification-wrapper" ref={notificationRef}>
           <button className="notification-button" onClick={openNotifications} title="Notifications">
             <FaBell />
@@ -219,6 +233,7 @@ const Navbar = ({ username, profilePicture }) => {
             )}
           </div>
         </div>
+        )}
         <div
           className="profile-wrapper"
           ref={menuRef}
@@ -226,16 +241,26 @@ const Navbar = ({ username, profilePicture }) => {
         >
           {profilePicture ? (
             <img src={profilePicture} alt="Profile" className="profile-pic" />
-          ) : username ? (
+          ) : isAuthenticated && username ? (
             <div className="profile-initial">{getInitial(username)}</div>
           ) : (
-            <FaUserCircle className="nav-icon" />
+            <button className="login-pill" type="button">Log in</button>
           )}
           <div className={`dropdown-menu ${showMenu ? "show" : ""}`}>
-            <button className="button" onClick={handleSignOut}>Sign Out</button>
-            <button className="button" onClick={() => navigate("/setting")}>Setting</button>
-            {roles.includes("admin") && (
-              <button className="button" onClick={() => navigate("/database")}>Database</button>
+            {isAuthenticated ? (
+              <>
+                <div className="account-name">{username}</div>
+                <button className="button" onClick={() => navigate("/setting")}>Setting</button>
+                {roles.includes("admin") && (
+                  <button className="button" onClick={() => navigate("/database")}>Database</button>
+                )}
+                <button className="button" onClick={handleSignOut}>Log Out</button>
+              </>
+            ) : (
+              <>
+                <button className="button" onClick={() => navigate("/signin")}>Log In</button>
+                <button className="button" onClick={() => navigate("/signup")}>Sign Up</button>
+              </>
             )}
           </div>
         </div>

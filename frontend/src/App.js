@@ -24,8 +24,8 @@ function App() {
           <Route path="/signin" element={<Signin />} />
           <Route path="/signup" element={<Signup />} />
 
-          {/* Protected layout */}
-          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>}>
+          {/* Main layout opens for guests; account-only pages stay protected. */}
+          <Route path="/" element={<Home />}>
             <Route index element={<MainContent />} />
             <Route path="playlist/:playlistId" element={<PlaylistPage />} />
             <Route path="album/:albumId" element={<AlbumPage />} />

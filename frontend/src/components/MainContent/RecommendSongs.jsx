@@ -56,18 +56,19 @@ const RecommendSongs = ({ title }) => {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
 
     const fetchRecommendations = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const res = await authFetch(`${API_BASE}/api/music/recommendations`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const res = token
+          ? await authFetch(`${API_BASE}/api/music/recommendations`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            })
+          : await fetch(`${API_BASE}/api/music/featured`);
         const data = await res.json();
         console.log("Recommendations:", data);
         setSongs(data);
