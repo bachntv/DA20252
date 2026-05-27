@@ -212,6 +212,9 @@ const Navbar = ({ username, profilePicture }) => {
       </div>
 
       <div className="nav-right">
+        <button className="premium-nav-link" type="button" onClick={() => navigate("/premium")}>
+          Premium
+        </button>
         {isAuthenticated && (
         <div className="notification-wrapper" ref={notificationRef}>
           <button className="notification-button" onClick={openNotifications} title="Notifications">

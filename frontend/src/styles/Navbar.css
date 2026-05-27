@@ -60,6 +60,22 @@
   gap: 20px;
 }
 
+.premium-nav-link {
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 0;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.premium-nav-link:hover {
+  color: var(--accent-primary-hover);
+  transform: translateY(-1px);
+}
+
 .notification-wrapper {
   position: relative;
 }

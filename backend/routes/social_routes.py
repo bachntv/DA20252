@@ -35,6 +35,10 @@ class CommentCreate(BaseModel):
     content: str
 
 
+class ContentUpdate(BaseModel):
+    content: str
+
+
 class ShareCreate(BaseModel):
     content: str | None = None
 
@@ -106,6 +110,7 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
         "author": user_public(author),
         "track": track_public(db, post.track_id),
         "shared_post_id": post.shared_post_id,
+        "is_owner": post.user_id == current_user_id,
         "like_count": like_count,
         "comment_count": comment_count,
         "share_count": share_count,
@@ -116,6 +121,7 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
                 "content": comment.content,
                 "created_at": comment.created_at.isoformat(),
                 "author": user_public(user),
+                "is_owner": comment.user_id == current_user_id,
             }
             for comment, user in comments
         ],
@@ -168,6 +174,45 @@ def create_post(payload: PostCreate, db: Session = Depends(get_db), current_user
     return serialize_post(db, post, current_user.id)
 
 
+@router.put("/posts/{post_id}")
+def update_post(post_id: str, payload: ContentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only edit your own posts")
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Post content is required")
+
+    post.content = content
+    post.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(post)
+    return serialize_post(db, post, current_user.id)
+
+
+@router.delete("/posts/{post_id}")
+def delete_post(post_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own posts")
+
+    db.query(SocialComment).filter(SocialComment.post_id == post_id).delete(synchronize_session=False)
+    db.query(SocialLike).filter(SocialLike.post_id == post_id).delete(synchronize_session=False)
+    db.query(SocialShare).filter(SocialShare.post_id == post_id).delete(synchronize_session=False)
+    db.query(SocialPost).filter(SocialPost.shared_post_id == post_id).update(
+        {"shared_post_id": None},
+        synchronize_session=False,
+    )
+    db.delete(post)
+    db.commit()
+    return {"message": "Post deleted", "post_id": post_id}
+
+
 @router.post("/posts/{post_id}/like")
 def toggle_like(post_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
@@ -202,6 +247,38 @@ def add_comment(post_id: str, payload: CommentCreate, db: Session = Depends(get_
     db.add(comment)
     if post.user_id != current_user.id:
         notify(db, post.user_id, "post_commented", "New comment", f"{current_user.username} commented on your post.")
+    db.commit()
+    return serialize_post(db, post, current_user.id)
+
+
+@router.put("/comments/{comment_id}")
+def update_comment(comment_id: str, payload: ContentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    comment = db.query(SocialComment).filter(SocialComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only edit your own comments")
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Comment content is required")
+
+    comment.content = content
+    post = db.query(SocialPost).filter(SocialPost.id == comment.post_id).first()
+    db.commit()
+    return serialize_post(db, post, current_user.id)
+
+
+@router.delete("/comments/{comment_id}")
+def delete_comment(comment_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    comment = db.query(SocialComment).filter(SocialComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own comments")
+
+    post = db.query(SocialPost).filter(SocialPost.id == comment.post_id).first()
+    db.delete(comment)
     db.commit()
     return serialize_post(db, post, current_user.id)
 

@@ -78,6 +78,10 @@
   box-shadow: var(--shadow-sm);
 }
 
+.music-card.artist-card-shape img {
+  border-radius: var(--radius-full);
+}
+
 .music-card .title {
   font-weight: 600;
   font-size: 14px;

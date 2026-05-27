@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaComment, FaHeart, FaRegHeart, FaRetweet, FaUserPlus, FaUserCheck } from "react-icons/fa";
+import { FaComment, FaEdit, FaHeart, FaRegHeart, FaRetweet, FaSave, FaTimes, FaTrash, FaUserPlus, FaUserCheck } from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
 import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
@@ -18,6 +18,10 @@ const SocialFeed = () => {
   const [users, setUsers] = useState([]);
   const [userQuery, setUserQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editingPostContent, setEditingPostContent] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentContent, setEditingCommentContent] = useState("");
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -95,6 +99,85 @@ const SocialFeed = () => {
       setComments((prev) => ({ ...prev, [postId]: "" }));
     } catch (err) {
       console.error("Failed to comment", err);
+    }
+  };
+
+  const startEditPost = (post) => {
+    setEditingPostId(post.id);
+    setEditingPostContent(post.content);
+  };
+
+  const cancelEditPost = () => {
+    setEditingPostId(null);
+    setEditingPostContent("");
+  };
+
+  const savePost = async (postId) => {
+    const value = editingPostContent.trim();
+    if (!value) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/posts/${postId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: value }),
+      });
+      const post = await res.json();
+      setPosts((prev) => prev.map((item) => (item.id === postId ? post : item)));
+      cancelEditPost();
+    } catch (err) {
+      console.error("Failed to edit post", err);
+    }
+  };
+
+  const deletePost = async (postId) => {
+    if (!window.confirm("Delete this post?")) return;
+
+    try {
+      await authFetch(`${API_BASE}/api/social/posts/${postId}`, { method: "DELETE" });
+      setPosts((prev) => prev.filter((item) => item.id !== postId));
+    } catch (err) {
+      console.error("Failed to delete post", err);
+    }
+  };
+
+  const startEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentContent(comment.content);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentContent("");
+  };
+
+  const saveComment = async (postId, commentId) => {
+    const value = editingCommentContent.trim();
+    if (!value) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/comments/${commentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: value }),
+      });
+      const post = await res.json();
+      setPosts((prev) => prev.map((item) => (item.id === postId ? post : item)));
+      cancelEditComment();
+    } catch (err) {
+      console.error("Failed to edit comment", err);
+    }
+  };
+
+  const deleteComment = async (postId, commentId) => {
+    if (!window.confirm("Delete this comment?")) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/comments/${commentId}`, { method: "DELETE" });
+      const post = await res.json();
+      setPosts((prev) => prev.map((item) => (item.id === postId ? post : item)));
+    } catch (err) {
+      console.error("Failed to delete comment", err);
     }
   };
 
@@ -193,14 +276,39 @@ const SocialFeed = () => {
           posts.map((post) => (
             <article className="post-card" key={post.id}>
               <div className="post-header">
-                <div className="post-avatar">{post.author.username?.[0]?.toUpperCase()}</div>
-                <div>
-                  <strong>{post.author.username}</strong>
-                  <span>{new Date(post.created_at).toLocaleString()}</span>
+                <div className="post-author">
+                  <div className="post-avatar">{post.author.username?.[0]?.toUpperCase()}</div>
+                  <div>
+                    <strong>{post.author.username}</strong>
+                    <span>{new Date(post.created_at).toLocaleString()}</span>
+                  </div>
                 </div>
+                {post.is_owner && (
+                  <div className="owner-actions">
+                    {editingPostId === post.id ? (
+                      <>
+                        <button onClick={() => savePost(post.id)} title="Save post"><FaSave /></button>
+                        <button onClick={cancelEditPost} title="Cancel"><FaTimes /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => startEditPost(post)} title="Edit post"><FaEdit /></button>
+                        <button onClick={() => deletePost(post.id)} title="Delete post"><FaTrash /></button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               {post.shared_post_id && <div className="shared-label">Shared post</div>}
-              <p className="post-content">{post.content}</p>
+              {editingPostId === post.id ? (
+                <textarea
+                  className="post-edit-input"
+                  value={editingPostContent}
+                  onChange={(e) => setEditingPostContent(e.target.value)}
+                />
+              ) : (
+                <p className="post-content">{post.content}</p>
+              )}
               {renderTrack(post.track)}
 
               <div className="post-actions">
@@ -226,8 +334,36 @@ const SocialFeed = () => {
               <div className="comments">
                 {post.comments.map((comment) => (
                   <div className="comment" key={comment.id}>
-                    <strong>{comment.author.username}</strong>
-                    <span>{comment.content}</span>
+                    <div className="comment-body">
+                      <strong>{comment.author.username}</strong>
+                      {editingCommentId === comment.id ? (
+                        <input
+                          value={editingCommentContent}
+                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveComment(post.id, comment.id);
+                            if (e.key === "Escape") cancelEditComment();
+                          }}
+                        />
+                      ) : (
+                        <span>{comment.content}</span>
+                      )}
+                    </div>
+                    {comment.is_owner && (
+                      <div className="comment-actions">
+                        {editingCommentId === comment.id ? (
+                          <>
+                            <button onClick={() => saveComment(post.id, comment.id)} title="Save comment"><FaSave /></button>
+                            <button onClick={cancelEditComment} title="Cancel"><FaTimes /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => startEditComment(comment)} title="Edit comment"><FaEdit /></button>
+                            <button onClick={() => deleteComment(post.id, comment.id)} title="Delete comment"><FaTrash /></button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div className="comment-input">

@@ -13,8 +13,33 @@ const MainContent = () => {
   const [savedAlbums, setSavedAlbums] = useState([]);
   const [likedArtists, setLikedArtists] = useState([]);
   const [recentHistory, setRecentHistory] = useState([]);
+  const [homeSections, setHomeSections] = useState({
+    popular_artists: [],
+    popular_albums: [],
+    popular_radio: [],
+    featured_charts: [],
+  });
   const token = localStorage.getItem("token");
   const userId = token ? jwtDecode(token).sub : null;
+
+  useEffect(() => {
+    const fetchHomeSections = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/music/home-sections`);
+        const data = await res.json();
+        setHomeSections({
+          popular_artists: Array.isArray(data.popular_artists) ? data.popular_artists : [],
+          popular_albums: Array.isArray(data.popular_albums) ? data.popular_albums : [],
+          popular_radio: Array.isArray(data.popular_radio) ? data.popular_radio : [],
+          featured_charts: Array.isArray(data.featured_charts) ? data.featured_charts : [],
+        });
+      } catch (err) {
+        console.error("Failed to fetch home sections:", err);
+      }
+    };
+
+    fetchHomeSections();
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -97,6 +122,18 @@ const MainContent = () => {
       {savedAlbums.length > 0 && <SectionScroller title="Albums You Saved" items={savedAlbums} />}
       {likedArtists.length > 0 && <SectionScroller title="Artists You Like" items={likedArtists} />}
       <RecommendSongs title="You May Like" />
+      {homeSections.popular_artists.length > 0 && (
+        <SectionScroller title="Popular Artists" items={homeSections.popular_artists} variant="artist" />
+      )}
+      {homeSections.popular_albums.length > 0 && (
+        <SectionScroller title="Popular Albums and Singles" items={homeSections.popular_albums} />
+      )}
+      {homeSections.popular_radio.length > 0 && (
+        <SectionScroller title="Popular Radio" items={homeSections.popular_radio} />
+      )}
+      {homeSections.featured_charts.length > 0 && (
+        <SectionScroller title="Featured Charts" items={homeSections.featured_charts} />
+      )}
     </div>
   );
 };

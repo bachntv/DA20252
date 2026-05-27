@@ -10,10 +10,12 @@ import MainContent from "./components/MainContent/MainContent";
 import PlaylistPage from "./components/MainContent/PlaylistPage";
 import AlbumPage from "./components/MainContent/AlbumPage";
 import ArtistPage from "./components/MainContent/ArtistPage";
+import ChartPage from "./components/MainContent/ChartPage";
 import SearchPage from "./components/MainContent/SearchPage";
 import SocialFeed from "./components/MainContent/SocialFeed";
 import AdminCrud from "./pages/AdminCrud";
 import SettingsPage from "./pages/Settings";
+import PremiumPage from "./pages/Premium";
 
 function App() {
   return (
@@ -30,6 +32,7 @@ function App() {
             <Route path="playlist/:playlistId" element={<PlaylistPage />} />
             <Route path="album/:albumId" element={<AlbumPage />} />
             <Route path="artist/:artistId" element={<ArtistPage />} />
+            <Route path="chart/:chartId" element={<ChartPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="social" element={<SocialFeed />} />
           </Route>
@@ -44,6 +47,8 @@ function App() {
             path="/setting"
             element={<ProtectedRoute><SettingsPage /></ProtectedRoute>}
           />
+
+          <Route path="/premium" element={<PremiumPage />} />
         </Routes>
       </Router>
     </PlayerProvider>

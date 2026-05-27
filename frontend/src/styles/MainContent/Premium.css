@@ -1,0 +1,226 @@
+.premium-page {
+  min-height: 100vh;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  padding: 28px clamp(18px, 4vw, 56px) 56px;
+}
+
+.premium-back {
+  align-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.premium-hero {
+  align-items: flex-end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin: 42px 0 28px;
+}
+
+.premium-kicker {
+  align-items: center;
+  color: var(--accent-primary);
+  display: flex;
+  font-size: 15px;
+  font-weight: 800;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.premium-hero h1 {
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 0.95;
+  margin: 0;
+}
+
+.premium-hero p {
+  color: var(--text-secondary);
+  font-size: 18px;
+  max-width: 680px;
+}
+
+.current-plan-pill,
+.premium-message,
+.pending-payment,
+.premium-plan {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.current-plan-pill {
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  padding: 12px 18px;
+  white-space: nowrap;
+}
+
+.current-plan-pill strong {
+  color: var(--text-primary);
+}
+
+.premium-status {
+  color: var(--text-secondary);
+}
+
+.premium-message {
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.pending-payment {
+  align-items: center;
+  border-radius: var(--radius-lg);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 20px;
+}
+
+.pending-payment h2 {
+  margin: 0 0 6px;
+}
+
+.pending-payment p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.premium-plans {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-width: 980px;
+}
+
+.premium-plan {
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 430px;
+  padding: 24px;
+}
+
+.premium-plan.highlighted {
+  border-color: var(--accent-primary);
+}
+
+.plan-topline {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-topline h2 {
+  font-size: 28px;
+  margin: 0;
+}
+
+.plan-topline span {
+  background: rgba(168, 230, 207, 0.18);
+  border-radius: var(--radius-full);
+  color: var(--accent-primary);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.plan-description {
+  color: var(--text-secondary);
+  min-height: 48px;
+}
+
+.plan-price {
+  font-size: 32px;
+  font-weight: 900;
+  margin: 10px 0 18px;
+}
+
+.plan-price span {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.premium-plan ul {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.premium-plan li {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 10px;
+}
+
+.premium-plan li svg {
+  color: var(--accent-primary);
+  flex: 0 0 auto;
+}
+
+.premium-primary,
+.premium-secondary {
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 13px 20px;
+  transition: all var(--transition-normal);
+}
+
+.premium-primary {
+  background: var(--accent-primary);
+  border: none;
+  color: var(--text-on-accent);
+}
+
+.premium-secondary {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+.premium-primary:hover:not(:disabled),
+.premium-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.premium-primary:disabled,
+.premium-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 720px) {
+  .premium-hero,
+  .pending-payment {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .current-plan-pill {
+    white-space: normal;
+  }
+}

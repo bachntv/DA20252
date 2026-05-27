@@ -104,6 +104,16 @@
   gap: 10px;
 }
 
+.post-header {
+  justify-content: space-between;
+}
+
+.post-author {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
 .post-avatar {
   width: 38px;
   height: 38px;
@@ -135,6 +145,20 @@
 .post-content {
   margin: 14px 0;
   line-height: 1.5;
+}
+
+.post-edit-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.5;
+  margin: 14px 0;
+  min-height: 86px;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
 }
 
 .social-track {
@@ -210,13 +234,32 @@
 
 .comment {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
+  justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.comment-body {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.comment-body input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  flex: 1;
+  padding: 7px 10px;
 }
 
 .comment span {
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .comment-input {
@@ -226,6 +269,31 @@
 
 .comment-input button {
   flex: 0 0 auto;
+}
+
+.owner-actions,
+.comment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.owner-actions button,
+.comment-actions button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  padding: 7px;
+}
+
+.owner-actions button:hover,
+.comment-actions button:hover {
+  background: rgba(168, 230, 207, 0.2);
+  color: var(--text-primary);
 }
 
 .follow-panel {

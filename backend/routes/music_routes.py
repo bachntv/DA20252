@@ -1181,6 +1181,285 @@ def get_featured_songs(db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/home-sections")
+def get_home_sections(db: Session = Depends(get_db)):
+    popular_artist_rows = db.execute(text("""
+        SELECT at.id, at.name, at.image_url, AVG(COALESCE(s.popularity, 0)) AS score
+        FROM artists at
+        JOIN songs s ON s.artist_id = at.id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE at.is_active = TRUE
+          AND s.is_active = TRUE
+          AND ab.is_active = TRUE
+        GROUP BY at.id, at.name, at.image_url
+        ORDER BY score DESC, COUNT(DISTINCT s.track_id) DESC
+        LIMIT 12
+    """)).fetchall()
+
+    popular_album_rows = db.execute(text("""
+        SELECT ab.id, ab.name, ab.image_url, ab.release_date,
+               STRING_AGG(DISTINCT at.id, ', ') AS artist_id,
+               STRING_AGG(DISTINCT at.name, ', ') AS artist_name,
+               MAX(COALESCE(s.popularity, 0)) AS score
+        FROM albums ab
+        JOIN songs s ON s.album_id = ab.id
+        JOIN artists at ON at.id = s.artist_id
+        WHERE ab.is_active = TRUE
+          AND s.is_active = TRUE
+          AND at.is_active = TRUE
+        GROUP BY ab.id, ab.name, ab.image_url, ab.release_date
+        ORDER BY score DESC, ab.release_date DESC NULLS LAST
+        LIMIT 12
+    """)).fetchall()
+
+    radio_rows = db.execute(text("""
+        SELECT s.track_genre, MAX(s.track_image_url) AS image_url,
+               COUNT(DISTINCT s.track_id) AS track_count,
+               AVG(COALESCE(s.popularity, 0)) AS score
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+          AND s.track_genre IS NOT NULL
+        GROUP BY s.track_genre
+        ORDER BY score DESC, track_count DESC
+        LIMIT 12
+    """)).fetchall()
+
+    global_chart_rows = db.execute(text("""
+        SELECT s.track_id, s.track_name, at.name AS artist_name, s.track_image_url,
+               COALESCE(s.popularity, 0) AS popularity
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+        ORDER BY popularity DESC
+        LIMIT 12
+    """)).fetchall()
+
+    vietnam_chart_rows = db.execute(text("""
+        SELECT s.track_id, s.track_name, at.name AS artist_name, s.track_image_url,
+               COALESCE(s.popularity, 0) AS popularity
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+          AND (
+            LOWER(at.name) LIKE '%son tung%'
+            OR LOWER(at.name) LIKE '%mtp%'
+            OR LOWER(at.name) LIKE '%den vau%'
+            OR LOWER(at.name) LIKE '%hoang thuy linh%'
+            OR LOWER(at.name) LIKE '%binz%'
+            OR LOWER(at.name) LIKE '%amee%'
+            OR LOWER(at.name) LIKE '%mono%'
+            OR LOWER(at.name) LIKE '%erik%'
+            OR LOWER(at.name) LIKE '%min%'
+            OR LOWER(at.name) LIKE '%duc phuc%'
+            OR LOWER(at.name) LIKE '%justatee%'
+            OR LOWER(s.track_name) LIKE '%vietnam%'
+            OR LOWER(s.track_name) LIKE '%viet nam%'
+          )
+        ORDER BY popularity DESC
+        LIMIT 12
+    """)).fetchall()
+
+    if not vietnam_chart_rows:
+        vietnam_chart_rows = db.execute(text("""
+            SELECT s.track_id, s.track_name, at.name AS artist_name, s.track_image_url,
+                   COALESCE(s.popularity, 0) AS popularity
+            FROM songs s
+            JOIN artists at ON at.id = s.artist_id
+            JOIN albums ab ON ab.id = s.album_id
+            WHERE s.is_active = TRUE
+              AND at.is_active = TRUE
+              AND ab.is_active = TRUE
+            ORDER BY popularity DESC
+            OFFSET 12
+            LIMIT 12
+        """)).fetchall()
+
+    top_global = global_chart_rows[0] if global_chart_rows else None
+    top_vietnam = vietnam_chart_rows[0] if vietnam_chart_rows else None
+
+    return {
+        "popular_artists": [
+            {
+                "id": row[0],
+                "title": row[1],
+                "subtitle": "Artist",
+                "image": row[2],
+                "type": "artist",
+            }
+            for row in popular_artist_rows
+        ],
+        "popular_albums": [
+            {
+                "id": row[0],
+                "title": row[1],
+                "subtitle": row[5] or "Album",
+                "image": row[2],
+                "type": "album",
+            }
+            for row in popular_album_rows
+        ],
+        "popular_radio": [
+            {
+                "id": f"radio-{row[0]}",
+                "title": f"{str(row[0]).replace('-', ' ').title()} Radio",
+                "subtitle": "Popular tracks and artists",
+                "image": row[1],
+                "type": "radio",
+            }
+            for row in radio_rows
+        ],
+        "featured_charts": [
+            {
+                "id": "top-songs-global",
+                "title": "Top Songs - Global",
+                "subtitle": "The most popular tracks right now",
+                "image": None,
+                "type": "chart",
+            },
+            {
+                "id": "top-songs-vietnam",
+                "title": "Top Songs - Vietnam",
+                "subtitle": "Vietnam picks from the catalog",
+                "image": None,
+                "type": "chart",
+            },
+        ],
+        "top_songs_global": [
+            {
+                "id": row[0],
+                "title": row[1],
+                "subtitle": row[2],
+                "artist": row[2],
+                "image": row[3],
+                "cover_url": row[3],
+                "type": "track",
+            }
+            for row in global_chart_rows
+        ],
+        "top_songs_vietnam": [
+            {
+                "id": row[0],
+                "title": row[1],
+                "subtitle": row[2],
+                "artist": row[2],
+                "image": row[3],
+                "cover_url": row[3],
+                "type": "track",
+            }
+            for row in vietnam_chart_rows
+        ],
+    }
+
+
+@router.get("/charts/{chart_id}")
+def get_chart(chart_id: str, db: Session = Depends(get_db)):
+    chart_map = {
+        "top-songs-global": {
+            "title": "Top Songs - Global",
+            "description": "The most popular tracks right now.",
+        },
+        "top-songs-vietnam": {
+            "title": "Top Songs - Vietnam",
+            "description": "Vietnam picks from the catalog.",
+        },
+    }
+    if chart_id not in chart_map:
+        raise HTTPException(status_code=404, detail="Chart not found")
+
+    if chart_id == "top-songs-vietnam":
+        rows = db.execute(text("""
+            SELECT s.track_id, s.track_name, at.id AS artist_id, at.name AS artist_name,
+                   ab.id AS album_id, ab.name AS album_name,
+                   s.duration_ms, s.track_image_url, COALESCE(s.popularity, 0) AS popularity
+            FROM songs s
+            JOIN artists at ON at.id = s.artist_id
+            JOIN albums ab ON ab.id = s.album_id
+            WHERE s.is_active = TRUE
+              AND at.is_active = TRUE
+              AND ab.is_active = TRUE
+              AND (
+                LOWER(at.name) LIKE '%son tung%'
+                OR LOWER(at.name) LIKE '%mtp%'
+                OR LOWER(at.name) LIKE '%den vau%'
+                OR LOWER(at.name) LIKE '%hoang thuy linh%'
+                OR LOWER(at.name) LIKE '%binz%'
+                OR LOWER(at.name) LIKE '%amee%'
+                OR LOWER(at.name) LIKE '%mono%'
+                OR LOWER(at.name) LIKE '%erik%'
+                OR LOWER(at.name) LIKE '%min%'
+                OR LOWER(at.name) LIKE '%duc phuc%'
+                OR LOWER(at.name) LIKE '%justatee%'
+                OR LOWER(s.track_name) LIKE '%vietnam%'
+                OR LOWER(s.track_name) LIKE '%viet nam%'
+              )
+            ORDER BY popularity DESC
+            LIMIT 50
+        """)).fetchall()
+
+        if not rows:
+            rows = db.execute(text("""
+                SELECT s.track_id, s.track_name, at.id AS artist_id, at.name AS artist_name,
+                       ab.id AS album_id, ab.name AS album_name,
+                       s.duration_ms, s.track_image_url, COALESCE(s.popularity, 0) AS popularity
+                FROM songs s
+                JOIN artists at ON at.id = s.artist_id
+                JOIN albums ab ON ab.id = s.album_id
+                WHERE s.is_active = TRUE
+                  AND at.is_active = TRUE
+                  AND ab.is_active = TRUE
+                ORDER BY popularity DESC
+                OFFSET 12
+                LIMIT 50
+            """)).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT s.track_id, s.track_name, at.id AS artist_id, at.name AS artist_name,
+                   ab.id AS album_id, ab.name AS album_name,
+                   s.duration_ms, s.track_image_url, COALESCE(s.popularity, 0) AS popularity
+            FROM songs s
+            JOIN artists at ON at.id = s.artist_id
+            JOIN albums ab ON ab.id = s.album_id
+            WHERE s.is_active = TRUE
+              AND at.is_active = TRUE
+              AND ab.is_active = TRUE
+            ORDER BY popularity DESC
+            LIMIT 50
+        """)).fetchall()
+
+    tracks = [
+        {
+            "id": row[0],
+            "title": row[1],
+            "artist_id": row[2],
+            "artist": row[3],
+            "album_id": row[4],
+            "album": row[5],
+            "duration": format_duration(row[6]),
+            "cover_url": row[7],
+            "date_added": None,
+        }
+        for row in rows
+    ]
+
+    return {
+        "id": chart_id,
+        "title": chart_map[chart_id]["title"],
+        "description": chart_map[chart_id]["description"],
+        "cover_url": tracks[0]["cover_url"] if tracks else None,
+        "tracks": tracks,
+    }
+
+
 @router.get("/recommendations", response_model=List[TrackResponse])
 def get_recommendations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = current_user.id
