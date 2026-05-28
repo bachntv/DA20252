@@ -305,6 +305,18 @@ async def update_playlist(
 @router.delete("/user_playlist/{playlist_id}")
 def delete_playlist(playlist_id: str, db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     user_id = current_user.id
+    owned_playlist = db.execute(text("""
+        SELECT 1
+        FROM playlist_user
+        WHERE playlist_id = :playlist_id
+          AND user_id = :user_id
+          AND type = 'playlist'
+        LIMIT 1
+    """), {"playlist_id": playlist_id, "user_id": user_id}).fetchone()
+
+    if not owned_playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found or not owned by user")
+
     # First delete all songs from the playlist
     db.execute(text("""
         DELETE FROM playlist_tracks
@@ -318,15 +330,12 @@ def delete_playlist(playlist_id: str, db: Session = Depends(get_db),current_user
     """), {"playlist_id": playlist_id, "user_id": user_id})
 
     # Then delete the playlist itself
-    result = db.execute(text("""
+    db.execute(text("""
         DELETE FROM playlists
-        WHERE id = :playlist_id AND owner_id = :user_id
-    """), {"playlist_id": playlist_id, "user_id": user_id})
+        WHERE id = :playlist_id
+    """), {"playlist_id": playlist_id})
 
     db.commit()
-
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Playlist not found or not owned by user")
 
     return {"message": "Playlist deleted successfully"}
 
@@ -376,7 +385,6 @@ async def create_playlist(
         cover_image_url=cover_url,
         # is_public=True,
         # last_played=None,
-        owner_id=user_id
     )
     db.add(playlist)
     db.add(PlaylistUser(user_id=user_id, playlist_id=playlist_id, type="playlist"))
@@ -525,6 +533,18 @@ def add_track_to_playlist(
     current_user: User = Depends(get_current_user)
 ):
     user_id = current_user.id
+    owned_playlist = db.execute(text("""
+        SELECT 1
+        FROM playlist_user
+        WHERE playlist_id = :playlist_id
+          AND user_id = :user_id
+          AND type = 'playlist'
+        LIMIT 1
+    """), {"playlist_id": playlist_id, "user_id": user_id}).fetchone()
+
+    if not owned_playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found or not owned by user")
+
     track_exists = db.execute(text("""
         SELECT 1
         FROM songs s

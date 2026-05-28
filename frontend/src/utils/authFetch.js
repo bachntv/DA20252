@@ -8,6 +8,12 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 export const authFetch = async (url, options = {}) => {
   const token = localStorage.getItem("token");
   const isFormData = options.body instanceof FormData;
+  const buildHeaders = (accessToken) => ({
+    ...(options.headers || {}),
+    Authorization: `Bearer ${accessToken}`,
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+  });
+
   // If no token at all, redirect to login with current path
   if (!token) {
     console.warn("No token found. Redirecting to login...");
@@ -21,11 +27,7 @@ export const authFetch = async (url, options = {}) => {
   // First attempt with current token
   let res = await fetch(url, {
     ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    },
+    headers: buildHeaders(token),
     credentials: "include",
   });
 
@@ -59,11 +61,7 @@ export const authFetch = async (url, options = {}) => {
       // Retry the original request with the new token
       res = await fetch(url, {
         ...options,
-        headers: {
-          ...(options.headers || {}),
-          Authorization: `Bearer ${data.access_token}`,
-          "Content-Type": "application/json",
-        },
+        headers: buildHeaders(data.access_token),
         credentials: "include",
       });
       

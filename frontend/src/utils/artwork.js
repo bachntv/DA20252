@@ -34,6 +34,20 @@ export const getArtworkPalette = (seed = "") => {
 
 const svgDataUri = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
+const isPlaceholderArtwork = (value = "") => {
+  const normalized = String(value).trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized.endsWith("/default_cover.png") ||
+    normalized === "default_cover.png" ||
+    normalized.endsWith("/my-logo.png") ||
+    normalized === "my-logo.png"
+  );
+};
+
+const firstRealArtwork = (...values) =>
+  values.find((value) => !isPlaceholderArtwork(value));
+
 export const createTrackArtwork = (track = {}) => {
   const title = track.track_name || track.title || "Song";
   const artist = track.artist_name || track.artist || "Unknown Artist";
@@ -95,17 +109,59 @@ export const createArtistArtwork = (artist = {}) => {
 };
 
 export const createAlbumArtwork = (album = {}) =>
-  createTrackArtwork({
-    id: album.id,
-    title: album.name || album.album,
-    artist: album.artist_name || album.artist,
-  });
+  {
+    const title = album.name || album.album || album.title || "Album";
+    const artist = album.artist_name || album.artist || "Unknown Artist";
+    const seed = album.id || album.album_id || `${title}-${artist}`;
+    const hash = hashString(seed);
+    const [primary, secondary, text] = getArtworkPalette(seed);
+    const accentPalette = ARTWORK_PALETTES[(hash >> 3) % ARTWORK_PALETTES.length];
+    const accent = accentPalette[1] === secondary ? accentPalette[0] : accentPalette[1];
+    const label = escapeSvgText(initials(title, "A"));
+    const safeTitle = escapeSvgText(title);
+    const safeArtist = escapeSvgText(artist);
+    const rotation = hash % 360;
+    const ringOffset = 56 + (hash % 42);
+    const stripeWidth = 18 + (hash % 18);
+
+    return svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+        <defs>
+          <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="${primary}"/>
+            <stop offset="58%" stop-color="${secondary}"/>
+            <stop offset="100%" stop-color="${accent}"/>
+          </linearGradient>
+          <pattern id="stripes" width="${stripeWidth}" height="${stripeWidth}" patternUnits="userSpaceOnUse" patternTransform="rotate(${rotation})">
+            <rect width="${stripeWidth}" height="${stripeWidth}" fill="transparent"/>
+            <rect width="${Math.max(4, Math.floor(stripeWidth / 3))}" height="${stripeWidth}" fill="#ffffff" opacity="0.12"/>
+          </pattern>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#020617" flood-opacity="0.26"/>
+          </filter>
+        </defs>
+        <rect width="400" height="400" rx="34" fill="url(#bg)"/>
+        <rect width="400" height="400" rx="34" fill="url(#stripes)"/>
+        <circle cx="${ringOffset}" cy="76" r="116" fill="#ffffff" opacity="0.12"/>
+        <circle cx="${344 - (hash % 72)}" cy="${300 + (hash % 48)}" r="132" fill="#000000" opacity="0.14"/>
+        <g filter="url(#shadow)">
+          <circle cx="200" cy="184" r="104" fill="#ffffff" opacity="0.22"/>
+          <circle cx="200" cy="184" r="72" fill="#000000" opacity="0.11"/>
+          <circle cx="200" cy="184" r="24" fill="${text}" opacity="0.92"/>
+          <circle cx="200" cy="184" r="10" fill="${primary}" opacity="0.95"/>
+        </g>
+        <text x="200" y="204" text-anchor="middle" fill="${text}" font-family="Arial, sans-serif" font-size="58" font-weight="800">${label}</text>
+        <text x="36" y="338" fill="${text}" font-family="Arial, sans-serif" font-size="25" font-weight="800">${safeTitle.slice(0, 24)}</text>
+        <text x="36" y="368" fill="${text}" opacity="0.8" font-family="Arial, sans-serif" font-size="17" font-weight="700">${safeArtist.slice(0, 30)}</text>
+      </svg>
+    `);
+  };
 
 export const getTrackArtwork = (track = {}) =>
-  track.image_url || track.cover_url || createTrackArtwork(track);
+  firstRealArtwork(track.image_url, track.cover_url) || createTrackArtwork(track);
 
 export const getArtistArtwork = (artist = {}) =>
-  artist.image || artist.profile_image_url || artist.image_url || createArtistArtwork(artist);
+  firstRealArtwork(artist.image, artist.profile_image_url, artist.image_url) || createArtistArtwork(artist);
 
 export const getAlbumArtwork = (album = {}) =>
-  album.image || album.cover_image_url || album.cover_url || createAlbumArtwork(album);
+  firstRealArtwork(album.image, album.cover_image_url, album.cover_url) || createAlbumArtwork(album);

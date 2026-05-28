@@ -115,30 +115,45 @@ const MusicPlayer = ({
         </div>
 
         <div className="playlist-dropdown-wrapper" ref={playlistRef}>
-          <button className="icon-button" onClick={() => setShowPlaylistOptions((prev) => !prev)}>
+          <button
+            className="icon-button"
+            onClick={() => currentSong && setShowPlaylistOptions((prev) => !prev)}
+            disabled={!currentSong}
+            title={currentSong ? "Add to playlist" : "No song playing"}
+          >
             <FaPlus />
           </button>
           {showPlaylistOptions && (
             <div className="playlist-options-dropdown">
-              {userPlaylists
-              .filter((pl) => pl.type === "playlist")
-              .map((pl) => (
-                <div
-                  key={pl.id}
-                  className="playlist-option-item"
-                  onClick={() => {
-                    onAddTrackToPlaylist(currentSong.id, pl.id);
-                    setShowPlaylistOptions(false);
-                  }}
-                >
-                  {pl.name}
-                </div>
-              ))}
+              {userPlaylists.filter((pl) => pl.type === "playlist").length === 0 ? (
+                <div className="playlist-option-item">No playlists yet</div>
+              ) : (
+                userPlaylists
+                  .filter((pl) => pl.type === "playlist")
+                  .map((pl) => (
+                    <div
+                      key={pl.id}
+                      className="playlist-option-item"
+                      onClick={() => {
+                        if (!currentSong) return;
+                        onAddTrackToPlaylist(currentSong.id, pl.id);
+                        setShowPlaylistOptions(false);
+                      }}
+                    >
+                      {pl.name}
+                    </div>
+                  ))
+              )}
             </div>
           )}
         </div>
 
-        <button className="icon-button" onClick={() => onToggleLike(currentSong?.id)}>
+        <button
+          className="icon-button"
+          onClick={() => currentSong && onToggleLike(currentSong.id)}
+          disabled={!currentSong}
+          title={currentSong ? "Like song" : "No song playing"}
+        >
           {isLiked ? <FaHeart color="#b09601" /> : <FaRegHeart />}
         </button>
       </div>
