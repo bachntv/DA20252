@@ -17,6 +17,7 @@ class SocialPost(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     track_id = Column(String, nullable=True, index=True)
+    image_url = Column(String, nullable=True)
     shared_post_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

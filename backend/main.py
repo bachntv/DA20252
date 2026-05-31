@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from models.base import engine, Base
 from sqlalchemy import text
 from models.song import Song
@@ -24,8 +25,12 @@ from routes.table_routes import router as database_router
 from routes.social_routes import router as social_router
 from utils.billing import ensure_default_plans
 from models.base import SessionLocal
+import os
 
 app = FastAPI()
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,6 +54,7 @@ with engine.begin() as conn:
     conn.execute(text("ALTER TABLE artists ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"))
     conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()"))
     conn.execute(text("ALTER TABLE songs ADD COLUMN IF NOT EXISTS lyrics TEXT"))
+    conn.execute(text("ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS image_url VARCHAR"))
 
 db = SessionLocal()
 try:

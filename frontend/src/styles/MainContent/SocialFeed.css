@@ -82,6 +82,7 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 12px;
+  gap: 12px;
 }
 
 .composer-actions label {
@@ -90,6 +91,61 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.composer-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.photo-picker {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  padding: 8px 12px;
+  transition: all var(--transition-fast);
+}
+
+.photo-picker:hover {
+  background: rgba(168, 230, 207, 0.2);
+  color: var(--text-primary);
+}
+
+.photo-picker input {
+  display: none;
+}
+
+.composer-photo-preview {
+  margin-top: 14px;
+  position: relative;
+  width: min(100%, 360px);
+}
+
+.composer-photo-preview img {
+  width: 100%;
+  max-height: 260px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  object-fit: cover;
+  display: block;
+}
+
+.composer-photo-preview button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.74);
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
 }
 
 .post-card {
@@ -145,6 +201,17 @@
 .post-content {
   margin: 14px 0;
   line-height: 1.5;
+}
+
+.post-photo {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  background: rgba(15, 23, 42, 0.18);
+  margin: 12px 0;
 }
 
 .post-edit-input {

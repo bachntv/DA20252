@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   FaPlay, FaPause, FaStepForward, FaStepBackward, FaVolumeUp, FaVolumeMute,
-  FaPlus, FaHeart, FaRegHeart, FaList
+  FaPlus, FaHeart, FaRegHeart, FaList, FaAlignLeft, FaRandom, FaRedoAlt
 } from "react-icons/fa";
 import "../styles/MusicPlayer.css";
 import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
@@ -25,7 +25,13 @@ const MusicPlayer = ({
   userPlaylists = [],
   onAddTrackToPlaylist,
   onToggleQueue,
-  isQueueVisible
+  isQueueVisible,
+  onToggleLyrics,
+  isLyricsVisible,
+  isShuffleEnabled,
+  repeatMode,
+  onToggleShuffle,
+  onCycleRepeat
 }) => {
   const audioRef = useRef(null);
   const playlistRef = useRef(null);
@@ -160,6 +166,15 @@ const MusicPlayer = ({
 
       <div className="player-center">
         <div className="controls">
+          <button
+            className={`icon-button ${isShuffleEnabled ? "active" : ""}`}
+            onClick={onToggleShuffle}
+            disabled={!currentSong}
+            aria-label="Shuffle"
+            title={isShuffleEnabled ? "Shuffle on" : "Shuffle"}
+          >
+            <FaRandom />
+          </button>
           <button className="icon-button" onClick={onPrev} aria-label="Previous" title="Previous">
             <FaStepBackward />
           </button>
@@ -168,6 +183,16 @@ const MusicPlayer = ({
           </button>
           <button className="icon-button" onClick={onNext} aria-label="Next" title="Next">
             <FaStepForward />
+          </button>
+          <button
+            className={`icon-button repeat-button ${repeatMode !== "off" ? "active" : ""}`}
+            onClick={onCycleRepeat}
+            disabled={!currentSong}
+            aria-label={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}
+            title={repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat"}
+          >
+            <FaRedoAlt />
+            {repeatMode === "one" && <span className="repeat-one-indicator">1</span>}
           </button>
         </div>
         <div className="progress-container">
@@ -181,6 +206,15 @@ const MusicPlayer = ({
       </div>
 
       <div className="player-right">
+        <button
+          className={`icon-button ${isLyricsVisible ? "active" : ""}`}
+          onClick={onToggleLyrics}
+          disabled={!currentSong}
+          title={currentSong ? "Lyrics" : "No song playing"}
+          aria-label="Lyrics"
+        >
+          <FaAlignLeft />
+        </button>
         <div className="volume-control">
           <button className="icon-button" onClick={handleVolumeClick}>
             {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import SidebarLeft from "../components/SidebarLeft";
 import RightContent from "../components/RightContent";
 import MusicPlayer from "../components/MusicPlayer";
+import NowPlayingFocus from "../components/MainContent/NowPlayingFocus";
 import { usePlayer } from "../context/PlayerContext";
 import { jwtDecode } from "jwt-decode";
 import "../styles/MainContent/Home.css";
@@ -14,6 +15,7 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
 const Home = () => {
   const token = localStorage.getItem("token");
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
   const userId = token ? jwtDecode(token)?.sub : null;
   const username = user?.username || "Guest";
@@ -21,7 +23,19 @@ const Home = () => {
   const [likedTrackIds, setLikedTrackIds] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const [isQueueVisible, setIsQueueVisible] = useState(false);
-  const { currentSong, isPlaying, playSong, stop, nextSong, prevSong } = usePlayer();
+  const [focusView, setFocusView] = useState(null);
+  const {
+    currentSong,
+    isPlaying,
+    playSong,
+    stop,
+    nextSong,
+    prevSong,
+    isShuffleEnabled,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode,
+  } = usePlayer();
   const [lastTrackedSongId, setLastTrackedSongId] = useState(null);
 
   // Fetch liked tracks
@@ -98,6 +112,19 @@ const Home = () => {
     }
   };
 
+  const toggleLyricsView = () => {
+    if (!currentSong) return;
+    setFocusView((current) => (current === "lyrics" ? null : "lyrics"));
+    setIsQueueVisible(false);
+  };
+
+  const openArtistPage = (artistInfo) => {
+    if (!artistInfo?.id) return;
+    setFocusView(null);
+    setIsQueueVisible(false);
+    navigate(`/artist/${artistInfo.id}`);
+  };
+
   useEffect(() => {
     if (!currentSong?.id || !token) return;
     if (lastTrackedSongId === currentSong.id) return;
@@ -131,11 +158,21 @@ const Home = () => {
       <div className="home-content">
         <SidebarLeft />
         <div className="main-outlet">
-          <Outlet />
+          {focusView ? (
+            <NowPlayingFocus
+              mode={focusView}
+              currentSong={currentSong}
+              onClose={() => setFocusView(null)}
+            />
+          ) : (
+            <Outlet />
+          )}
         </div>
         <RightContent 
           currentSong={currentSong} 
           isQueueVisible={isQueueVisible}
+          onShowLyrics={() => setFocusView("lyrics")}
+          onOpenArtistPage={openArtistPage}
         />
       </div>
 
@@ -153,8 +190,17 @@ const Home = () => {
         onToggleLike={handleToggleLike}
         onAddTrackToPlaylist={handleAddTrackToPlaylist}
         onToggleFullscreen={() => alert("Fullscreen not implemented")}
-        onToggleQueue={() => setIsQueueVisible(!isQueueVisible)}
+        onToggleQueue={() => {
+          setIsQueueVisible(!isQueueVisible);
+          setFocusView(null);
+        }}
         isQueueVisible={isQueueVisible}
+        onToggleLyrics={toggleLyricsView}
+        isLyricsVisible={focusView === "lyrics"}
+        isShuffleEnabled={isShuffleEnabled}
+        repeatMode={repeatMode}
+        onToggleShuffle={toggleShuffle}
+        onCycleRepeat={cycleRepeatMode}
       />
     </div>
   );

@@ -8,7 +8,17 @@ import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
-const RightContent = ({ currentSong, isQueueVisible }) => {
+const formatNumber = (value) => {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat("en-US").format(number);
+};
+
+const getPrimaryArtistId = (song) => {
+  const artistId = song?.artist_id || song?.artistId;
+  return artistId ? String(artistId).split(", ")[0] : null;
+};
+
+const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistPage }) => {
   const [relatedSongs, setRelatedSongs] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -20,6 +30,8 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
   const [lyrics, setLyrics] = useState("");
   const [isEditingLyrics, setIsEditingLyrics] = useState(false);
   const [lyricsDraft, setLyricsDraft] = useState("");
+  const [artistInfo, setArtistInfo] = useState(null);
+  const [isArtistFollowed, setIsArtistFollowed] = useState(false);
 
   const fetchMp3Url = async (trackName) => {
     try {
@@ -65,7 +77,7 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
     };
 
     fetchRelated();
-  }, [currentSong]);
+  }, [currentSong, isQueueVisible]);
 
   useEffect(() => {
     if (!currentSong?.id) return;
@@ -85,6 +97,69 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
 
     fetchLyrics();
   }, [currentSong?.id]);
+
+  useEffect(() => {
+    const artistId = getPrimaryArtistId(currentSong);
+    if (!artistId || isQueueVisible) {
+      setArtistInfo(null);
+      return;
+    }
+
+    const fetchArtistInfo = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/music/artist/${artistId}`);
+        const data = await res.json();
+        setArtistInfo(data);
+      } catch (err) {
+        setArtistInfo(null);
+      }
+    };
+
+    fetchArtistInfo();
+  }, [currentSong, isQueueVisible]);
+
+  useEffect(() => {
+    const artistId = getPrimaryArtistId(currentSong);
+    if (!userId || !artistId) return;
+
+    const fetchFollowState = async () => {
+      try {
+        const res = await authFetch(`${API_BASE}/api/music/user_playlist`);
+        const data = await res.json();
+        setIsArtistFollowed(data.some((item) => item.id === artistId && item.type === "artist"));
+      } catch (err) {
+        setIsArtistFollowed(false);
+      }
+    };
+
+    fetchFollowState();
+    window.addEventListener("artistUpdated", fetchFollowState);
+    return () => window.removeEventListener("artistUpdated", fetchFollowState);
+  }, [currentSong, userId]);
+
+  const toggleArtistFollow = async () => {
+    const artistId = getPrimaryArtistId(currentSong);
+    if (!artistId || !userId) return;
+
+    try {
+      if (isArtistFollowed) {
+        await authFetch(`${API_BASE}/api/music/remove_from_library/${artistId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsArtistFollowed(false);
+      } else {
+        await authFetch(`${API_BASE}/api/music/add_to_library/${artistId}?type=artist`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsArtistFollowed(true);
+      }
+      window.dispatchEvent(new Event("artistUpdated"));
+    } catch (err) {
+      console.error("Failed to update artist follow state", err);
+    }
+  };
 
   const saveLyrics = async () => {
     if (!currentSong?.id) return;
@@ -237,9 +312,12 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
           <div className="lyrics-section">
             <div className="lyrics-header">
               <h4>Lyrics</h4>
-              <button onClick={() => (isEditingLyrics ? saveLyrics() : setIsEditingLyrics(true))}>
-                {isEditingLyrics ? "Save" : "Edit"}
-              </button>
+              <div className="lyrics-actions">
+                <button onClick={onShowLyrics}>Open</button>
+                <button onClick={() => (isEditingLyrics ? saveLyrics() : setIsEditingLyrics(true))}>
+                  {isEditingLyrics ? "Save" : "Edit"}
+                </button>
+              </div>
             </div>
             {isEditingLyrics ? (
               <textarea
@@ -251,6 +329,51 @@ const RightContent = ({ currentSong, isQueueVisible }) => {
               <p className="lyrics-text">{lyrics || "No lyrics added yet."}</p>
             )}
           </div>
+          {artistInfo && (
+            <section
+              className="artist-about-section"
+              onClick={() => onOpenArtistPage?.(artistInfo)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onOpenArtistPage?.(artistInfo);
+              }}
+            >
+              <div className="artist-about-header">
+                <img
+                  src={artistInfo.profile_image_url || "/default_cover.png"}
+                  alt={artistInfo.name}
+                  onError={(e) => { e.target.onerror = null; e.target.src = "/default_cover.png"; }}
+                />
+                <div>
+                  <h4>About the artist</h4>
+                  <p>{artistInfo.name}</p>
+                </div>
+              </div>
+              <button
+                className="artist-follow-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleArtistFollow();
+                }}
+                disabled={!userId}
+              >
+                {isArtistFollowed ? "Following" : "Follow"}
+              </button>
+              <p className="artist-listeners">
+                {formatNumber(artistInfo.monthly_listeners || artistInfo.followers)} monthly listeners
+              </p>
+              <button
+                className="artist-description-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenArtistPage?.(artistInfo);
+                }}
+              >
+                {artistInfo.description || "No artist description available yet."}
+              </button>
+            </section>
+          )}
           <h4>Related Music</h4>
           {relatedSongs.length > 0 ? (
             relatedSongs.map((track) => (

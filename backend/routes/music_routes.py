@@ -626,16 +626,51 @@ def remove_from_library(
 ### Artist API
 @router.get("/artist/{artist_id}", response_model=ArtistResponse)
 def get_artist_by_id(artist_id: str, db: Session = Depends(get_db)):
-    query = text("SELECT id, name, image_url FROM artists WHERE id = :artist_id AND is_active = TRUE")
+    query = text("SELECT id, name, image_url, COALESCE(followers, 0) FROM artists WHERE id = :artist_id AND is_active = TRUE")
     result = db.execute(query, {"artist_id": artist_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Artist not found")
 
+    stats = db.execute(text("""
+        SELECT
+            COUNT(DISTINCT s.track_id) AS track_count,
+            COALESCE(SUM(COALESCE(s.popularity, 0)), 0) AS popularity_score
+        FROM songs s
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.artist_id = :artist_id
+          AND s.is_active = TRUE
+          AND ab.is_active = TRUE
+    """), {"artist_id": artist_id}).fetchone()
+    monthly_row = db.execute(text("""
+        SELECT COUNT(DISTINCT lh.user_id)
+        FROM listening_history lh
+        JOIN songs s ON s.track_id = lh.track_id
+        WHERE s.artist_id = :artist_id
+          AND lh.played_at >= NOW() - INTERVAL '30 days'
+    """), {"artist_id": artist_id}).fetchone()
+
+    track_count = int(stats[0] or 0) if stats else 0
+    popularity_score = int(stats[1] or 0) if stats else 0
+    followers = int(result[3] or 0)
+    monthly_listeners = int((monthly_row[0] if monthly_row else 0) or 0)
+    if monthly_listeners == 0:
+        monthly_listeners = max(followers, popularity_score)
+
+    description = (
+        f"{result[1]} has {track_count} active songs in the catalog. "
+        f"Their music is followed by {followers:,} listeners in the app, "
+        "with a catalog profile built from current tracks, plays, and library activity."
+    )
+
     return ArtistResponse(
         id=result[0],
         name=result[1],
         profile_image_url=result[2],
+        followers=followers,
+        monthly_listeners=monthly_listeners,
+        track_count=track_count,
+        description=description,
     )
 
 @router.get("/artist/{artist_id}/songs", response_model=List[TrackResponse])

@@ -101,6 +101,12 @@
   font-weight: 700;
 }
 
+.lyrics-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .lyrics-section textarea {
   width: 100%;
   min-height: 140px;
@@ -121,6 +127,84 @@
   max-height: 190px;
   overflow-y: auto;
   margin: 0;
+}
+
+.artist-about-section {
+  border-bottom: 1px solid var(--border-light);
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.artist-about-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.artist-about-header img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: var(--shadow-sm);
+}
+
+.artist-about-header h4 {
+  margin: 0 0 4px;
+}
+
+.artist-about-header p {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.artist-follow-button {
+  border: 1px solid var(--border-light);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-radius: var(--radius-full);
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.artist-follow-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.artist-listeners {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.artist-description-button {
+  display: -webkit-box;
+  width: 100%;
+  max-height: 68px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 0;
+  text-align: left;
+}
+
+.artist-description-button:hover {
+  color: var(--text-primary);
 }
 
 .video-card {

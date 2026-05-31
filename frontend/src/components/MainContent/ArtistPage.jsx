@@ -11,6 +11,11 @@ import { createArtistArtwork, createTrackArtwork, getArtistArtwork, getArtworkPa
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
+const formatNumber = (value) => {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat("en-US").format(number);
+};
+
 const ArtistPage = () => {
   const { artistId } = useParams();
   const navigate = useNavigate();
@@ -169,6 +174,10 @@ const ArtistPage = () => {
           id: artistId,
           name: artistData.name,
           image: artistData.profile_image_url,
+          description: artistData.description,
+          followers: artistData.followers,
+          monthly_listeners: artistData.monthly_listeners,
+          track_count: artistData.track_count,
           tracks: formatted,
         });
       } catch (err) {
@@ -255,9 +264,12 @@ const ArtistPage = () => {
         <div className="playlist-info">
           <span className="playlist-label">Artist</span>
           <h1>{artist.name}</h1>
-          <p>{artist.tracks.length} songs</p>
+          <p>
+            {artist.tracks.length} songs
+            {artist.monthly_listeners ? ` • ${formatNumber(artist.monthly_listeners)} monthly listeners` : ""}
+          </p>
           <button className="add-button" onClick={isAdded ? removeArtist : addArtist}>
-            {isAdded ? "Remove" : "Add +"}
+            {isAdded ? "Following" : "Follow"}
           </button>
         </div>
       </div>
@@ -276,6 +288,11 @@ const ArtistPage = () => {
           {isCurrentArtistPlaying ? <i className="fas fa-pause" /> : <i className="fas fa-play" />}
         </span>
       </button>
+
+      <section className="artist-about-main">
+        <h2>About the artist</h2>
+        <p>{artist.description || "No artist description available yet."}</p>
+      </section>
 
       <table className="track-table">
         <thead>

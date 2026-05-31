@@ -12,6 +12,17 @@ export const PlayerProvider = ({ children }) => {
   const [queue, setQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [history, setHistory] = useState([]);
+  const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);
+  const [repeatMode, setRepeatMode] = useState("off");
+
+  const getTrackName = (song) => song?.track_name || song?.title || "";
+
+  const fetchSongUrl = async (song) => {
+    if (song?.mp3_url) return song.mp3_url;
+    const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(getTrackName(song))}`);
+    const data = await res.json();
+    return data.url;
+  };
 
   const playSong = (song, remainingQueue = []) => {
     if (currentSong) {
@@ -27,21 +38,54 @@ export const PlayerProvider = ({ children }) => {
   };
 
   const nextSong = async () => {
-    if (queue.length === 0) {
+    if (!currentSong && queue.length === 0) {
       setIsPlaying(false);
       return;
     }
 
-    const [next, ...rest] = queue;
+    if (repeatMode === "one" && currentSong) {
+      try {
+        const mp3Url = await fetchSongUrl(currentSong);
+        setCurrentSong({ ...currentSong, mp3_url: mp3Url });
+        setIsPlaying(true);
+      } catch (err) {
+        console.error("Error repeating current song", err);
+      }
+      return;
+    }
+
+    if (queue.length === 0) {
+      if (repeatMode === "all" && history.length > 0) {
+        const repeatedQueue = currentSong ? [...history, currentSong] : [...history];
+        const [nextRepeat, ...restRepeat] = repeatedQueue;
+
+        try {
+          const mp3Url = await fetchSongUrl(nextRepeat);
+          setCurrentSong({ ...nextRepeat, mp3_url: mp3Url });
+          setQueue(restRepeat);
+          setHistory([]);
+          setIsPlaying(true);
+        } catch (err) {
+          console.error("Error restarting repeated queue", err);
+        }
+        return;
+      }
+
+      setIsPlaying(false);
+      return;
+    }
+
+    const nextIndex = isShuffleEnabled ? Math.floor(Math.random() * queue.length) : 0;
+    const next = queue[nextIndex];
+    const rest = queue.filter((_, index) => index !== nextIndex);
 
     if (currentSong) {
       setHistory((prev) => [...prev, currentSong]);
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(next.track_name)}`);
-      const data = await res.json();
-      const enrichedNext = { ...next, mp3_url: data.url };
+      const mp3Url = await fetchSongUrl(next);
+      const enrichedNext = { ...next, mp3_url: mp3Url };
 
       setCurrentSong(enrichedNext);
       setQueue(rest);
@@ -62,9 +106,8 @@ export const PlayerProvider = ({ children }) => {
     const newQueue = currentSong ? [currentSong, ...queue] : queue;
 
     try {
-      const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(previous.track_name)}`);
-      const data = await res.json();
-      const enrichedPrev = { ...previous, mp3_url: data.url };
+      const mp3Url = await fetchSongUrl(previous);
+      const enrichedPrev = { ...previous, mp3_url: mp3Url };
 
       setCurrentSong(enrichedPrev);
       setQueue(newQueue);
@@ -77,6 +120,18 @@ export const PlayerProvider = ({ children }) => {
 
   const removeFromQueue = (trackId) => {
     setQueue(prevQueue => prevQueue.filter(track => track.id !== trackId));
+  };
+
+  const toggleShuffle = () => {
+    setIsShuffleEnabled((prev) => !prev);
+  };
+
+  const cycleRepeatMode = () => {
+    setRepeatMode((current) => {
+      if (current === "off") return "all";
+      if (current === "all") return "one";
+      return "off";
+    });
   };
 
   useEffect(() => {
@@ -96,6 +151,10 @@ export const PlayerProvider = ({ children }) => {
         nextSong,
         prevSong,
         removeFromQueue,
+        isShuffleEnabled,
+        repeatMode,
+        toggleShuffle,
+        cycleRepeatMode,
       }}
     >
       {children}

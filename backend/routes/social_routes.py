@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
+import os
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -16,6 +18,9 @@ from utils.format_ms import format_duration
 
 
 router = APIRouter()
+SOCIAL_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads", "social"))
+ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def get_db():
@@ -109,6 +114,7 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
         "created_at": post.created_at.isoformat(),
         "author": user_public(author),
         "track": track_public(db, post.track_id),
+        "image_url": post.image_url,
         "shared_post_id": post.shared_post_id,
         "is_owner": post.user_id == current_user_id,
         "like_count": like_count,
@@ -126,6 +132,27 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
             for comment, user in comments
         ],
     }
+
+
+async def save_social_image(image: UploadFile | None, request: Request):
+    if not image or not image.filename:
+        return None
+
+    extension = ALLOWED_IMAGE_TYPES.get(image.content_type)
+    if not extension:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP, or GIF images are supported")
+
+    contents = await image.read()
+    if len(contents) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be 5 MB or smaller")
+
+    os.makedirs(SOCIAL_UPLOAD_DIR, exist_ok=True)
+    file_name = f"{uuid4().hex}{extension}"
+    file_path = os.path.join(SOCIAL_UPLOAD_DIR, file_name)
+    with open(file_path, "wb") as file:
+        file.write(contents)
+
+    return str(request.base_url).rstrip("/") + f"/uploads/social/{file_name}"
 
 
 @router.get("/feed")
@@ -156,6 +183,47 @@ def create_post(payload: PostCreate, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail="Track not found")
 
     post = SocialPost(user_id=current_user.id, content=content, track_id=payload.track_id)
+    db.add(post)
+    db.flush()
+
+    followers = db.query(SocialFollow).filter(SocialFollow.following_id == current_user.id).all()
+    for follow in followers:
+        notify(
+            db,
+            follow.follower_id,
+            "followed_user_posted",
+            "New post",
+            f"{current_user.username} just posted something new.",
+        )
+
+    db.commit()
+    db.refresh(post)
+    return serialize_post(db, post, current_user.id)
+
+
+@router.post("/posts/photo")
+async def create_photo_post(
+    request: Request,
+    content: str = Form(""),
+    track_id: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post_content = content.strip()
+    if not post_content and not image:
+        raise HTTPException(status_code=400, detail="Post content or photo is required")
+
+    if track_id and not db.query(Song).filter(Song.track_id == track_id).first():
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    image_url = await save_social_image(image, request)
+    post = SocialPost(
+        user_id=current_user.id,
+        content=post_content or "Shared a photo",
+        track_id=track_id,
+        image_url=image_url,
+    )
     db.add(post)
     db.flush()
 
@@ -294,6 +362,7 @@ def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db)
         user_id=current_user.id,
         content=(payload.content or f"Shared a post").strip(),
         track_id=original.track_id,
+        image_url=original.image_url,
         shared_post_id=original.id,
     )
     db.add(share)

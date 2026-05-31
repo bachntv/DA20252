@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaComment, FaEdit, FaHeart, FaRegHeart, FaRetweet, FaSave, FaTimes, FaTrash, FaUserPlus, FaUserCheck } from "react-icons/fa";
+import { FaCamera, FaComment, FaEdit, FaHeart, FaRegHeart, FaRetweet, FaSave, FaTimes, FaTrash, FaUserPlus, FaUserCheck } from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
 import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
@@ -13,6 +13,8 @@ const SocialFeed = () => {
   const [posts, setPosts] = useState([]);
   const [content, setContent] = useState("");
   const [attachSong, setAttachSong] = useState(true);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState("");
   const [comments, setComments] = useState({});
   const [shareText, setShareText] = useState({});
   const [users, setUsers] = useState([]);
@@ -55,24 +57,52 @@ const SocialFeed = () => {
     return () => clearTimeout(timer);
   }, [fetchUsers]);
 
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview("");
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(photoFile);
+    setPhotoPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [photoFile]);
+
   const createPost = async () => {
-    if (!content.trim()) return;
-    const payload = {
-      content,
-      track_id: attachSong && currentSong?.id ? currentSong.id : null,
-    };
+    if (!content.trim() && !photoFile) return;
+    const trackId = attachSong && currentSong?.id ? currentSong.id : null;
 
     try {
-      await authFetch(`${API_BASE}/api/social/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (photoFile) {
+        const formData = new FormData();
+        formData.append("content", content);
+        if (trackId) formData.append("track_id", trackId);
+        formData.append("image", photoFile);
+
+        await authFetch(`${API_BASE}/api/social/posts/photo`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        await authFetch(`${API_BASE}/api/social/posts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, track_id: trackId }),
+        });
+      }
       setContent("");
+      setPhotoFile(null);
       fetchFeed();
     } catch (err) {
       console.error("Failed to create post", err);
     }
+  };
+
+  const handlePhotoChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    setPhotoFile(file);
   };
 
   const toggleLike = async (postId) => {
@@ -250,16 +280,31 @@ const SocialFeed = () => {
             placeholder="Share what you are listening to..."
           />
           <div className="composer-actions">
-            <label>
-              <input
-                type="checkbox"
-                checked={attachSong}
-                onChange={(e) => setAttachSong(e.target.checked)}
-              />
-              Attach current song
-            </label>
-            <button onClick={createPost}>Post</button>
+            <div className="composer-options">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={attachSong}
+                  onChange={(e) => setAttachSong(e.target.checked)}
+                />
+                Attach current song
+              </label>
+              <label className="photo-picker">
+                <FaCamera />
+                Photo
+                <input type="file" accept="image/*" onChange={handlePhotoChange} />
+              </label>
+            </div>
+            <button onClick={createPost} disabled={!content.trim() && !photoFile}>Post</button>
           </div>
+          {photoPreview && (
+            <div className="composer-photo-preview">
+              <img src={photoPreview} alt="Selected upload preview" />
+              <button onClick={() => setPhotoFile(null)} title="Remove photo">
+                <FaTimes />
+              </button>
+            </div>
+          )}
           {attachSong && currentSong && renderTrack({
             id: currentSong.id,
             title: currentSong.track_name || currentSong.title,
@@ -308,6 +353,9 @@ const SocialFeed = () => {
                 />
               ) : (
                 <p className="post-content">{post.content}</p>
+              )}
+              {post.image_url && (
+                <img className="post-photo" src={post.image_url} alt="Shared post" />
               )}
               {renderTrack(post.track)}
 
