@@ -27,3 +27,6 @@ class Song(Base):
     track_image_url = Column(String)
     lyrics = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    audio_url = Column(String, nullable=True)
+    approval_status = Column(String, nullable=False, default="approved")
+    uploaded_by_user_id = Column(String, nullable=True)

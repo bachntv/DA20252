@@ -75,6 +75,24 @@ def get_current_admin_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+
+def get_current_artist_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        roles = payload.get("roles", [])
+        if user_id is None or ("artist" not in roles and "admin" not in roles):
+            raise HTTPException(status_code=403, detail="Artist access required")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == str(user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
 ### Authenticated user dependency
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     try:
@@ -98,12 +116,16 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    requested_role = (user.account_role or "user").strip().lower()
+    roles = "user,artist" if requested_role == "artist" else "user"
+
     new_user = User(
         username=user.username,
         email=user.email,
         hashed_password=hash_password(user.password),
         birthdate=user.birthdate,
         gender=user.gender,
+        roles=roles,
         # roles="admin"
     )
     db.add(new_user)

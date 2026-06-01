@@ -9,3 +9,4 @@ class Artist(Base):
     followers = Column(Integer)
     image_url = Column(String)
     is_active = Column(Boolean, nullable=False, default=True)
+    owner_user_id = Column(String, nullable=True)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Query, Body, Request
 from typing import List, Union, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -8,6 +8,10 @@ from models.playlist_user import PlaylistUser
 from models.listening_history import ListeningHistory
 from models.payment import Payment
 from models.song_purchase import SongPurchase
+from models.song import Song
+from models.artist import Artist
+from models.album import Album
+from models.album_artists import AlbumArtist
 from schemas.album import AlbumResponse
 from schemas.track import TrackResponse
 from schemas.user import UserResponse
@@ -28,7 +32,7 @@ from dotenv import load_dotenv
 from utils.recommender_loader import recommender
 import random
 from models.user import User
-from .auth_routes import get_current_user
+from .auth_routes import get_current_user, get_current_artist_user, get_current_admin_user
 import requests
 from utils.billing import ensure_user_has_subscription, get_subscription_plan
 from utils.activity import log_activity
@@ -46,6 +50,10 @@ cloudinary.config(
 )
 
 router = APIRouter()
+ARTIST_AUDIO_TYPES = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/wav": ".wav", "audio/x-wav": ".wav"}
+ARTIST_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+MAX_ARTIST_AUDIO_BYTES = 20 * 1024 * 1024
+MAX_ARTIST_IMAGE_BYTES = 5 * 1024 * 1024
 
 def get_db():
     db = SessionLocal()
@@ -53,6 +61,30 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def user_has_role(user: User, role: str) -> bool:
+    return role in [item.strip() for item in (user.roles or "").split(",")]
+
+
+async def save_artist_upload(file: UploadFile, request: Request, folder: str, allowed_types: dict, max_bytes: int):
+    extension = allowed_types.get(file.content_type)
+    if not extension:
+        allowed = ", ".join(sorted(allowed_types.keys()))
+        raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {allowed}")
+
+    contents = await file.read()
+    if len(contents) > max_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is too large")
+
+    upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads", folder))
+    os.makedirs(upload_dir, exist_ok=True)
+    file_name = f"{uuid4().hex}{extension}"
+    file_path = os.path.join(upload_dir, file_name)
+    with open(file_path, "wb") as output:
+        output.write(contents)
+
+    return str(request.base_url).rstrip("/") + f"/uploads/{folder}/{file_name}"
 
 
 def serialize_purchase_track(row):
@@ -251,6 +283,153 @@ def purchase_song(
 
     row = get_track_purchase_row(db, track_id, current_user.id)
     return {"owned": True, "track": serialize_purchase_track(row) if row else None}
+
+
+@router.get("/artist/uploads")
+def get_artist_uploads(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_artist_user),
+):
+    rows = db.execute(text("""
+        SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
+               s.track_genre, s.approval_status, s.is_active, s.track_image_url, s.audio_url
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.uploaded_by_user_id = :user_id
+        ORDER BY s.track_name ASC
+    """), {"user_id": current_user.id}).fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "title": row[1],
+            "artist": row[2],
+            "album": row[3],
+            "genre": row[4],
+            "approval_status": row[5],
+            "is_active": row[6],
+            "cover_url": row[7],
+            "audio_url": row[8],
+        }
+        for row in rows
+    ]
+
+
+@router.post("/artist/uploads")
+async def upload_artist_song(
+    request: Request,
+    title: str = Form(...),
+    artist_name: str = Form(...),
+    album_name: str = Form("Singles"),
+    genre: str = Form("independent"),
+    lyrics: str = Form(""),
+    audio_file: UploadFile = File(...),
+    cover_image: UploadFile = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_artist_user),
+):
+    clean_title = title.strip()
+    clean_artist = artist_name.strip()
+    clean_album = album_name.strip() or "Singles"
+    clean_genre = genre.strip() or "independent"
+    if not clean_title or not clean_artist:
+        raise HTTPException(status_code=400, detail="Title and artist name are required")
+
+    audio_url = await save_artist_upload(audio_file, request, "artist_songs", ARTIST_AUDIO_TYPES, MAX_ARTIST_AUDIO_BYTES)
+    cover_url = None
+    if cover_image and cover_image.filename:
+        cover_url = await save_artist_upload(cover_image, request, "artist_covers", ARTIST_IMAGE_TYPES, MAX_ARTIST_IMAGE_BYTES)
+
+    artist = db.query(Artist).filter(
+        Artist.owner_user_id == current_user.id,
+        Artist.name == clean_artist,
+    ).first()
+    if not artist:
+        artist = Artist(
+            id=f"artist_{uuid4().hex}",
+            name=clean_artist,
+            followers=0,
+            image_url=cover_url,
+            is_active=True,
+            owner_user_id=current_user.id,
+        )
+        db.add(artist)
+    elif cover_url and not artist.image_url:
+        artist.image_url = cover_url
+
+    album = Album(
+        id=f"album_{uuid4().hex}",
+        name=clean_album,
+        release_date=datetime.utcnow().date().isoformat(),
+        image_url=cover_url,
+        type="single",
+        is_active=True,
+    )
+    track_id = f"artist_track_{uuid4().hex}"
+    song = Song(
+        track_id=track_id,
+        track_name=clean_title,
+        popularity=0,
+        duration_ms=0,
+        explicit=False,
+        danceability=0,
+        energy=0,
+        key=0,
+        loudness=0,
+        mode=1,
+        speechiness=0,
+        acousticness=0,
+        instrumentalness=0,
+        liveness=0,
+        valence=0,
+        tempo=0,
+        time_signature=4,
+        track_genre=clean_genre,
+        artist_id=artist.id,
+        album_id=album.id,
+        track_image_url=cover_url,
+        lyrics=lyrics,
+        is_active=False,
+        audio_url=audio_url,
+        approval_status="pending",
+        uploaded_by_user_id=current_user.id,
+    )
+    db.add(album)
+    db.add(AlbumArtist(album_id=album.id, artist_id=artist.id))
+    db.add(song)
+    db.commit()
+    log_activity(db, current_user.id, "artist_upload_song", "track", track_id, f"Uploaded pending song: {clean_title}")
+
+    return {
+        "id": track_id,
+        "title": clean_title,
+        "artist": clean_artist,
+        "album": clean_album,
+        "approval_status": "pending",
+        "message": "Song uploaded and waiting for admin approval",
+    }
+
+
+@router.post("/artist/uploads/{track_id}/approval")
+def update_artist_upload_approval(
+    track_id: str,
+    status: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    if status not in {"approved", "rejected", "pending"}:
+        raise HTTPException(status_code=400, detail="Status must be approved, rejected, or pending")
+
+    song = db.query(Song).filter(Song.track_id == track_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    song.approval_status = status
+    song.is_active = status == "approved"
+    db.commit()
+    log_activity(db, current_user.id, f"artist_upload_{status}", "track", track_id, f"Set upload status to {status}")
+    return {"id": track_id, "approval_status": song.approval_status, "is_active": song.is_active}
 
 
 ### Playlist API
@@ -1006,8 +1185,17 @@ def search_items(
     return []
 
 @router.get("/mp3url/{track_name}")
-def get_mp3_url(track_name: str):
+def get_mp3_url(track_name: str, request: Request, db: Session = Depends(get_db)):
     try:
+        uploaded_track = db.query(Song).filter(
+            Song.track_name == track_name,
+            Song.audio_url.isnot(None),
+            Song.is_active == True,
+            Song.approval_status == "approved",
+        ).first()
+        if uploaded_track:
+            return {"url": uploaded_track.audio_url}
+
         url = generate_presigned_url(track_name)
         if not url:
             return JSONResponse(status_code=404, content={"detail": "URL could not be generated"})
