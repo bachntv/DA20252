@@ -1,0 +1,170 @@
+.artist-studio {
+  color: var(--text-primary);
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 28px;
+}
+
+.artist-studio-header {
+  align-items: center;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.artist-studio-header h1 {
+  font-size: 28px;
+  margin: 0 0 6px;
+}
+
+.artist-studio-header p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.artist-studio-header svg {
+  color: var(--accent-primary);
+  font-size: 34px;
+}
+
+.artist-upload-panel {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 18px;
+  padding: 20px;
+}
+
+.artist-upload-panel h2 {
+  font-size: 18px;
+  margin: 0 0 14px;
+}
+
+.artist-upload-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.artist-upload-form input,
+.artist-upload-form textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 12px;
+  width: 100%;
+}
+
+.artist-upload-form textarea {
+  grid-column: 1 / -1;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.artist-file-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 8px;
+  padding: 12px;
+}
+
+.artist-file-input input {
+  margin: 0;
+  padding: 0;
+}
+
+.artist-upload-form button {
+  align-items: center;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.artist-upload-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.artist-upload-status {
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin: 14px 0 0;
+}
+
+.artist-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artist-upload-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.artist-upload-row strong,
+.artist-upload-row span {
+  display: block;
+}
+
+.artist-upload-row span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.upload-status {
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 0;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.upload-status--approved {
+  background: rgba(56, 176, 0, 0.2);
+}
+
+.upload-status--pending {
+  background: rgba(244, 162, 97, 0.24);
+}
+
+.upload-status--rejected {
+  background: rgba(208, 0, 0, 0.2);
+}
+
+.artist-empty {
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+
+@media (max-width: 720px) {
+  .artist-upload-form {
+    grid-template-columns: 1fr;
+  }
+}

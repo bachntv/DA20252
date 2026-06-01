@@ -123,22 +123,50 @@
 .crud-form {
   margin-top: 20px;
   margin-bottom: 32px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
   align-items: flex-end;
 }
 
-.crud-form input {
+.crud-form-note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  grid-column: 1 / -1;
+}
+
+.crud-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crud-field-wide {
+  grid-column: 1 / -1;
+}
+
+.crud-field span {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.crud-field small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.crud-form input,
+.crud-form textarea {
   padding: 12px 16px;
   background: var(--bg-input);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  flex: 1;
-  min-width: 160px;
   font-size: 14px;
   transition: all var(--transition-normal);
+  width: 100%;
 }
 
 .crud-form select {
@@ -147,13 +175,18 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  flex: 1;
-  min-width: 160px;
   font-size: 14px;
   transition: all var(--transition-normal);
+  width: 100%;
 }
 
-.crud-form input:focus {
+.crud-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.crud-form input:focus,
+.crud-form textarea:focus {
   outline: none;
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(168, 230, 207, 0.3);
@@ -175,11 +208,24 @@
   height: 44px;
   font-weight: 600;
   transition: all var(--transition-normal);
+  width: fit-content;
 }
 
 .crud-form button:hover {
   background: var(--accent-primary-hover);
   transform: translateY(-1px);
+}
+
+.crud-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.crud-table-note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 8px 0 14px;
 }
 
 /* Data Table */
@@ -237,6 +283,24 @@
 .data-table button:hover {
   color: var(--accent-primary-hover);
   background: rgba(168, 230, 207, 0.2);
+}
+
+.visibility-badge {
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.visibility-badge.visible {
+  background: rgba(56, 176, 0, 0.18);
+  color: #1f6f3d;
+}
+
+.visibility-badge.hidden {
+  background: rgba(208, 0, 0, 0.16);
+  color: #8b1e1e;
 }
 
 /* Overview Section */

@@ -13,6 +13,26 @@ load_dotenv("backend/.env")
 
 router = APIRouter(dependencies=[Depends(get_current_admin_user)])
 
+VISIBLE_ADMIN_TABLES = {
+    "users",
+    "songs",
+    "albums",
+    "artists",
+    "payments",
+    "plans",
+    "subscriptions",
+    "song_purchases",
+    "notification_logs",
+    "social_posts",
+    "social_comments",
+    "activity_logs",
+}
+
+
+def ensure_admin_table_visible(table_name: str):
+    if table_name not in VISIBLE_ADMIN_TABLES:
+        raise HTTPException(status_code=403, detail="This low-level table is hidden from admin database management")
+
 def get_conn():
     return psycopg2.connect(
         dbname=os.getenv("POSTGRES_DATABASE"),
@@ -51,6 +71,20 @@ def create_notification(cur, user_id: str | None, event_type: str, title: str, m
         """,
         (str(uuid.uuid4()), user_id, event_type, title, message),
     )
+    cur.execute(
+        """
+        DELETE FROM public.notification_logs
+        WHERE user_id IS NOT DISTINCT FROM %s
+          AND id NOT IN (
+            SELECT id
+            FROM public.notification_logs
+            WHERE user_id IS NOT DISTINCT FROM %s
+            ORDER BY created_at DESC
+            LIMIT 100
+          )
+        """,
+        (user_id, user_id),
+    )
 
 @router.get("/tables")
 def get_tables():
@@ -61,7 +95,7 @@ def get_tables():
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = 'public'
         """)
-        tables = [row[0] for row in cur.fetchall()]
+        tables = [row[0] for row in cur.fetchall() if row[0] in VISIBLE_ADMIN_TABLES]
         cur.close()
         conn.close()
         return tables
@@ -70,6 +104,7 @@ def get_tables():
 
 @router.get("/tables/{table_name}/schema")
 def get_table_schema(table_name: str):
+    ensure_admin_table_visible(table_name)
     try:
         conn = get_conn()
         cur = conn.cursor()
@@ -91,6 +126,7 @@ def get_table_schema(table_name: str):
 
 @router.get("/tables/{table_name}")
 def read_table(table_name: str):
+    ensure_admin_table_visible(table_name)
     try:
         conn = get_conn()
         cur = conn.cursor()
@@ -105,6 +141,7 @@ def read_table(table_name: str):
 
 @router.post("/tables/{table_name}")
 def create_row(table_name: str, row: Dict[str, Any]):
+    ensure_admin_table_visible(table_name)
     try:
         conn = get_conn()
         cur = conn.cursor()
@@ -121,6 +158,7 @@ def create_row(table_name: str, row: Dict[str, Any]):
 
 @router.put("/tables/{table_name}/{pk}")
 def update_row(table_name: str, pk: str, row: Dict[str, Any]):
+    ensure_admin_table_visible(table_name)
     try:
         pk_name = get_primary_key(table_name)
 
@@ -147,6 +185,7 @@ def update_row(table_name: str, pk: str, row: Dict[str, Any]):
 
 @router.delete("/tables/{table_name}/{pk}")
 def delete_row(table_name: str, pk: str):
+    ensure_admin_table_visible(table_name)
     try:
         pk_name = get_primary_key(table_name)
         conn = get_conn()

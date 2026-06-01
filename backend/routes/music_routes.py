@@ -36,6 +36,7 @@ from .auth_routes import get_current_user, get_current_artist_user, get_current_
 import requests
 from utils.billing import ensure_user_has_subscription, get_subscription_plan
 from utils.activity import log_activity
+from utils.notifications import log_notification
 
 ASIA_TIMEZONE = ZoneInfo("Asia/Bangkok")
 
@@ -54,6 +55,8 @@ ARTIST_AUDIO_TYPES = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/wav": ".
 ARTIST_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 MAX_ARTIST_AUDIO_BYTES = 20 * 1024 * 1024
 MAX_ARTIST_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_LISTENING_HISTORY_PER_USER = 500
+LISTENING_HISTORY_RETENTION_DAYS = 180
 
 def get_db():
     db = SessionLocal()
@@ -65,6 +68,11 @@ def get_db():
 
 def user_has_role(user: User, role: str) -> bool:
     return role in [item.strip() for item in (user.roles or "").split(",")]
+
+
+def get_users_with_role(db: Session, role: str):
+    users = db.query(User).all()
+    return [user for user in users if user_has_role(user, role)]
 
 
 async def save_artist_upload(file: UploadFile, request: Request, folder: str, allowed_types: dict, max_bytes: int):
@@ -85,6 +93,25 @@ async def save_artist_upload(file: UploadFile, request: Request, folder: str, al
         output.write(contents)
 
     return str(request.base_url).rstrip("/") + f"/uploads/{folder}/{file_name}"
+
+
+def prune_listening_history(db: Session, user_id: str):
+    db.execute(text("""
+        DELETE FROM listening_history
+        WHERE user_id = :user_id
+          AND played_at < NOW() - (:retention_days || ' days')::interval
+    """), {"user_id": user_id, "retention_days": LISTENING_HISTORY_RETENTION_DAYS})
+    db.execute(text("""
+        DELETE FROM listening_history
+        WHERE user_id = :user_id
+          AND id NOT IN (
+            SELECT id
+            FROM listening_history
+            WHERE user_id = :user_id
+            ORDER BY played_at DESC
+            LIMIT :limit
+          )
+    """), {"user_id": user_id, "limit": MAX_LISTENING_HISTORY_PER_USER})
 
 
 def serialize_purchase_track(row):
@@ -153,6 +180,8 @@ def record_listening_history(
         source=source or "player",
     )
     db.add(entry)
+    db.flush()
+    prune_listening_history(db, current_user.id)
     db.commit()
     db.refresh(entry)
     log_activity(db, current_user.id, "play_song", "track", track_id, f"Played from {source or 'player'}")
@@ -398,8 +427,23 @@ async def upload_artist_song(
     db.add(album)
     db.add(AlbumArtist(album_id=album.id, artist_id=artist.id))
     db.add(song)
-    db.commit()
     log_activity(db, current_user.id, "artist_upload_song", "track", track_id, f"Uploaded pending song: {clean_title}")
+    for admin in get_users_with_role(db, "admin"):
+        log_notification(
+            db,
+            user_id=admin.id,
+            event_type="artist_song_pending_approval",
+            title="Song needs approval",
+            message=f"{current_user.username} uploaded \"{clean_title}\" by {clean_artist}.",
+        )
+    log_notification(
+        db,
+        user_id=current_user.id,
+        event_type="artist_song_submitted",
+        title="Song submitted",
+        message=f"\"{clean_title}\" was submitted and is waiting for admin approval.",
+    )
+    db.commit()
 
     return {
         "id": track_id,
@@ -427,9 +471,67 @@ def update_artist_upload_approval(
 
     song.approval_status = status
     song.is_active = status == "approved"
-    db.commit()
     log_activity(db, current_user.id, f"artist_upload_{status}", "track", track_id, f"Set upload status to {status}")
+    if song.uploaded_by_user_id:
+        status_label = {
+            "approved": "approved and published",
+            "rejected": "rejected",
+            "pending": "moved back to pending review",
+        }[status]
+        log_notification(
+            db,
+            user_id=song.uploaded_by_user_id,
+            event_type=f"artist_song_{status}",
+            title="Song review updated",
+            message=f"\"{song.track_name}\" was {status_label}.",
+        )
+    db.commit()
     return {"id": track_id, "approval_status": song.approval_status, "is_active": song.is_active}
+
+
+@router.get("/admin/songs")
+def get_admin_songs(
+    status: str = Query("all", pattern="^(all|pending|approved|rejected)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    params = {}
+    where_clause = ""
+    if status != "all":
+        where_clause = "WHERE s.approval_status = :status"
+        params["status"] = status
+
+    rows = db.execute(text(f"""
+        SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
+               s.track_genre, COALESCE(s.approval_status, 'approved') AS approval_status,
+               s.is_active, s.track_image_url, s.audio_url, u.username AS uploaded_by
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        LEFT JOIN users u ON u.id = s.uploaded_by_user_id
+        {where_clause}
+        ORDER BY
+          CASE WHEN COALESCE(s.approval_status, 'approved') = 'pending' THEN 0 ELSE 1 END,
+          s.track_name ASC
+        LIMIT 300
+    """), params).fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "title": row[1],
+            "artist": row[2],
+            "album": row[3],
+            "genre": row[4],
+            "approval_status": row[5],
+            "is_active": row[6],
+            "cover_url": row[7],
+            "audio_url": row[8],
+            "uploaded_by": row[9],
+            "source": "artist_upload" if row[8] else "catalog",
+        }
+        for row in rows
+    ]
 
 
 ### Playlist API

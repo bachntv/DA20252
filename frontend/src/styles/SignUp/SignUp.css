@@ -91,6 +91,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+.signup-role-select {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  display: block;
+  margin: 16px auto 0 auto;
+  box-sizing: border-box;
+  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+}
+
+.signup-role-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(168, 230, 207, 0.3);
+}
+
 /* Custom scrollbar for react-select dropdown */
 .react-select__menu-list::-webkit-scrollbar {
   width: 6px;

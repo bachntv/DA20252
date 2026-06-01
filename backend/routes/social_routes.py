@@ -15,6 +15,7 @@ from models.subscription import Subscription
 from models.user import User
 from routes.auth_routes import get_current_user
 from utils.format_ms import format_duration
+from utils.notifications import log_notification
 
 
 router = APIRouter()
@@ -80,14 +81,13 @@ def track_public(db: Session, track_id: str | None):
 def notify(db: Session, user_id: str | None, event_type: str, title: str, message: str):
     if not user_id:
         return
-    db.add(NotificationLog(
+    log_notification(
+        db,
         user_id=user_id,
         event_type=event_type,
-        channel="internal",
         title=title,
         message=message,
-        status="created",
-    ))
+    )
 
 
 def serialize_post(db: Session, post: SocialPost, current_user_id: str):

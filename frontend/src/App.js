@@ -14,7 +14,9 @@ import ChartPage from "./components/MainContent/ChartPage";
 import SearchPage from "./components/MainContent/SearchPage";
 import SocialFeed from "./components/MainContent/SocialFeed";
 import PurchasedSongs from "./components/MainContent/PurchasedSongs";
+import ArtistStudio from "./pages/ArtistStudio";
 import AdminCrud from "./pages/AdminCrud";
+import AdminSongs from "./pages/AdminSongs";
 import SettingsPage from "./pages/Settings";
 import PremiumPage from "./pages/Premium";
 
@@ -37,12 +39,17 @@ function App() {
             <Route path="search" element={<SearchPage />} />
             <Route path="social" element={<SocialFeed />} />
             <Route path="purchased" element={<ProtectedRoute><PurchasedSongs /></ProtectedRoute>} />
+            <Route path="artist-studio" element={<ProtectedRoute><ArtistStudio /></ProtectedRoute>} />
           </Route>
 
           {/* ✅ Full-page route for /database, still protected */}
           <Route
             path="/database"
             element={<ProtectedRoute><AdminCrud /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/songs"
+            element={<ProtectedRoute><AdminSongs /></ProtectedRoute>}
           />
 
           <Route

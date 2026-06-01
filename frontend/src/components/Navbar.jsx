@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/Navbar.css";
-import { FaBell, FaChevronDown, FaCompass, FaHome, FaUsers } from "react-icons/fa";
+import { FaBell, FaChevronDown, FaCompass, FaHome, FaMusic, FaUsers } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode"; 
 import { authFetch } from "../utils/authFetch";
@@ -269,8 +269,16 @@ const Navbar = ({ username, profilePicture }) => {
               <>
                 <div className="account-name">{username}</div>
                 <button className="button" onClick={() => navigate("/setting")}>Setting</button>
+                {roles.includes("artist") && (
+                  <button className="button" onClick={() => navigate("/artist-studio")}>
+                    <FaMusic /> Artist Studio
+                  </button>
+                )}
                 {roles.includes("admin") && (
-                  <button className="button" onClick={() => navigate("/database")}>Database</button>
+                  <>
+                    <button className="button" onClick={() => navigate("/admin/songs")}>Song Review</button>
+                    <button className="button" onClick={() => navigate("/database")}>Database</button>
+                  </>
                 )}
                 <button className="button" onClick={handleSignOut}>Log Out</button>
               </>

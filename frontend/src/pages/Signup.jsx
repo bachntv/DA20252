@@ -26,6 +26,20 @@ const DropdownIndicator = (props) => {
   );
 };
 
+const getSignupErrorMessage = (errorData) => {
+  if (!errorData?.detail) return "Signup failed.";
+  if (typeof errorData.detail === "string") return errorData.detail;
+  if (Array.isArray(errorData.detail)) {
+    return errorData.detail
+      .map((item) => {
+        const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "field";
+        return item.msg ? `${field}: ${item.msg}` : String(item);
+      })
+      .join(". ");
+  }
+  return JSON.stringify(errorData.detail);
+};
+
 const Signup = () => {
   const [formData, setFormData] = useState({
     email: "",
@@ -33,6 +47,7 @@ const Signup = () => {
     username: "",
     birthdate: "",
     gender: "",
+    accountRole: "user",
     agree: false
   });
 
@@ -57,7 +72,7 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { email, password, username, birthdate, gender, agree } = formData;
+    const { email, password, username, birthdate, gender, accountRole, agree } = formData;
 
     if (!email || !password || !username || !birthdate) {
       setError("Please fill in all required fields.");
@@ -72,12 +87,12 @@ const Signup = () => {
       const response = await fetch(`${API_BASE}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, username, birthdate, gender })
+        body: JSON.stringify({ email, password, username, birthdate, gender, account_role: accountRole })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Signup failed.");
+        throw new Error(getSignupErrorMessage(errorData));
       }
 
       const result = await response.json();
@@ -104,6 +119,15 @@ const Signup = () => {
           <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required />
           <input type="password" name="password" placeholder="Password" value={formData.password} onChange={handleChange} required />
           <input type="date" name="birthdate" placeholder="Date of Birth" value={formData.birthdate} onChange={handleChange} required />
+          <select
+            name="accountRole"
+            value={formData.accountRole}
+            onChange={handleChange}
+            className="signup-role-select"
+          >
+            <option value="user">Listener account</option>
+            <option value="artist">Artist account - upload songs</option>
+          </select>
 
           <Select
             options={genderOptions}
