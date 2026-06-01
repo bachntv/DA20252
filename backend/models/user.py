@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date
+from sqlalchemy import Column, Integer, String, Date, Boolean
 from models.base import Base
 import uuid
 
@@ -16,3 +16,5 @@ class User(Base):
     gender = Column(String, nullable=True)
     roles = Column(String, nullable=False, default="user")
     account_type = Column(String, nullable=False, default="free")
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_muted = Column(Boolean, nullable=False, default=False)

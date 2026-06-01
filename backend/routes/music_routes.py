@@ -534,6 +534,157 @@ def get_admin_songs(
     ]
 
 
+@router.get("/admin/moderation")
+def get_admin_moderation(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    users = db.query(User).order_by(User.username.asc()).limit(300).all()
+    artists = db.query(Artist).order_by(Artist.name.asc()).limit(300).all()
+    album_rows = db.execute(text("""
+        SELECT ab.id, ab.name, ab.image_url, ab.release_date, ab.type, ab.is_active,
+               COALESCE(STRING_AGG(DISTINCT at.name, ', ' ORDER BY at.name), 'Unknown Artist') AS artist_names
+        FROM albums ab
+        LEFT JOIN album_artists aa ON aa.album_id = ab.id
+        LEFT JOIN artists at ON at.id = aa.artist_id
+        GROUP BY ab.id, ab.name, ab.image_url, ab.release_date, ab.type, ab.is_active
+        ORDER BY artist_names ASC, ab.name ASC
+        LIMIT 300
+    """)).fetchall()
+    return {
+        "users": [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "roles": user.roles,
+                "account_type": user.account_type,
+                "is_active": user.is_active,
+                "is_muted": user.is_muted,
+            }
+            for user in users
+        ],
+        "artists": [
+            {
+                "id": artist.id,
+                "name": artist.name,
+                "image_url": artist.image_url,
+                "followers": artist.followers or 0,
+                "is_active": artist.is_active,
+                "owner_user_id": artist.owner_user_id,
+            }
+            for artist in artists
+        ],
+        "albums": [
+            {
+                "id": row[0],
+                "name": row[1],
+                "image_url": row[2],
+                "release_date": row[3],
+                "type": row[4],
+                "is_active": row[5],
+                "artist_names": row[6],
+            }
+            for row in album_rows
+        ],
+    }
+
+
+@router.post("/admin/users/{user_id}/moderation")
+def update_user_moderation(
+    user_id: str,
+    action: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    if action not in {"mute", "unmute", "kick", "restore"}:
+        raise HTTPException(status_code=400, detail="Action must be mute, unmute, kick, or restore")
+    if user_id == current_user.id and action == "kick":
+        raise HTTPException(status_code=400, detail="Admins cannot disable their own account")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if action == "mute":
+        user.is_muted = True
+    elif action == "unmute":
+        user.is_muted = False
+    elif action == "kick":
+        user.is_active = False
+    elif action == "restore":
+        user.is_active = True
+
+    log_activity(db, current_user.id, f"user_{action}", "user", user_id, f"{action} user {user.username}")
+    log_notification(
+        db,
+        user_id=user.id,
+        event_type=f"user_{action}",
+        title="Account moderation updated",
+        message=f"Your account was {action}ed by an admin." if action != "restore" else "Your account access was restored by an admin.",
+    )
+    db.commit()
+    return {"id": user.id, "is_active": user.is_active, "is_muted": user.is_muted}
+
+
+@router.post("/admin/artists/{artist_id}/moderation")
+def update_artist_moderation(
+    artist_id: str,
+    action: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    if action not in {"hide", "show"}:
+        raise HTTPException(status_code=400, detail="Action must be hide or show")
+
+    artist = db.query(Artist).filter(Artist.id == artist_id).first()
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+
+    is_active = action == "show"
+    artist.is_active = is_active
+    db.query(Song).filter(Song.artist_id == artist_id).update(
+        {"is_active": is_active},
+        synchronize_session=False,
+    )
+    log_activity(db, current_user.id, f"artist_{action}", "artist", artist_id, f"{action} artist {artist.name}")
+    if artist.owner_user_id:
+        log_notification(
+            db,
+            user_id=artist.owner_user_id,
+            event_type=f"artist_{action}",
+            title="Artist profile moderated",
+            message=f"Your artist profile was {'shown publicly' if is_active else 'hidden from listeners'} by an admin.",
+        )
+    db.commit()
+    return {"id": artist.id, "is_active": artist.is_active}
+
+
+@router.post("/admin/albums/{album_id}/moderation")
+def update_album_moderation(
+    album_id: str,
+    action: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user),
+):
+    if action not in {"hide", "show"}:
+        raise HTTPException(status_code=400, detail="Action must be hide or show")
+
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+
+    is_active = action == "show"
+    album.is_active = is_active
+    db.query(Song).filter(Song.album_id == album_id).update(
+        {"is_active": is_active},
+        synchronize_session=False,
+    )
+    log_activity(db, current_user.id, f"album_{action}", "album", album_id, f"{action} album {album.name}")
+    db.commit()
+    return {"id": album.id, "is_active": album.is_active}
+
+
 ### Playlist API
 @router.get("/user_playlist", response_model=List[PlaylistResponse])
 def get_user_playlists(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

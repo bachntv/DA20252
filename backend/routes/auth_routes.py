@@ -74,6 +74,8 @@ def get_current_admin_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(User).filter(User.id == str(user_id)).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
     return user
 
 
@@ -90,6 +92,8 @@ def get_current_artist_user(token: str = Depends(oauth2_scheme), db: Session = D
     user = db.query(User).filter(User.id == str(user_id)).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
     return user
 
 
@@ -106,6 +110,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.id == str(user_id)).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
     return user
 
 
@@ -176,6 +182,8 @@ def signin(credentials: UserLogin, response: Response, db: Session = Depends(get
     )
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username/email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="This account has been disabled")
 
     subscription = ensure_user_has_subscription(db, user)
     plan = get_subscription_plan(db, subscription)
@@ -229,6 +237,8 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
     user = db.query(User).filter(User.id == userId).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
 
     subscription = ensure_user_has_subscription(db, user)
     plan = get_subscription_plan(db, subscription)

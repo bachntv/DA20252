@@ -1336,6 +1336,9 @@ const AdminCrud = () => {
               <li onClick={() => navigate("/admin/songs")}>
                 <span>Song Review</span>
               </li>
+              <li onClick={() => navigate("/admin/moderation")}>
+                <span>User & Artist Moderation</span>
+              </li>
             </ul>
           </div>
           {ADMIN_VIEW_GROUPS.map(renderSidebarSection)}

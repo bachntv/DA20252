@@ -17,6 +17,7 @@ import PurchasedSongs from "./components/MainContent/PurchasedSongs";
 import ArtistStudio from "./pages/ArtistStudio";
 import AdminCrud from "./pages/AdminCrud";
 import AdminSongs from "./pages/AdminSongs";
+import AdminModeration from "./pages/AdminModeration";
 import SettingsPage from "./pages/Settings";
 import PremiumPage from "./pages/Premium";
 
@@ -50,6 +51,10 @@ function App() {
           <Route
             path="/admin/songs"
             element={<ProtectedRoute><AdminSongs /></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/moderation"
+            element={<ProtectedRoute><AdminModeration /></ProtectedRoute>}
           />
 
           <Route

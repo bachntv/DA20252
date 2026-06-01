@@ -277,6 +277,7 @@ const Navbar = ({ username, profilePicture }) => {
                 {roles.includes("admin") && (
                   <>
                     <button className="button" onClick={() => navigate("/admin/songs")}>Song Review</button>
+                    <button className="button" onClick={() => navigate("/admin/moderation")}>Moderation</button>
                     <button className="button" onClick={() => navigate("/database")}>Database</button>
                   </>
                 )}

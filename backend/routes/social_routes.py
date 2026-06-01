@@ -90,6 +90,11 @@ def notify(db: Session, user_id: str | None, event_type: str, title: str, messag
     )
 
 
+def require_not_muted(user: User):
+    if user.is_muted:
+        raise HTTPException(status_code=403, detail="This account is muted and cannot post, comment, or share")
+
+
 def serialize_post(db: Session, post: SocialPost, current_user_id: str):
     author = db.query(User).filter(User.id == post.user_id).first()
     comments = (
@@ -175,6 +180,7 @@ def get_feed(
 
 @router.post("/posts")
 def create_post(payload: PostCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_not_muted(current_user)
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Post content is required")
@@ -210,6 +216,7 @@ async def create_photo_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_not_muted(current_user)
     post_content = content.strip()
     if not post_content and not image:
         raise HTTPException(status_code=400, detail="Post content or photo is required")
@@ -303,6 +310,7 @@ def toggle_like(post_id: str, db: Session = Depends(get_db), current_user: User 
 
 @router.post("/posts/{post_id}/comments")
 def add_comment(post_id: str, payload: CommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_not_muted(current_user)
     post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -353,6 +361,7 @@ def delete_comment(comment_id: str, db: Session = Depends(get_db), current_user:
 
 @router.post("/posts/{post_id}/share")
 def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_not_muted(current_user)
     original = db.query(SocialPost).filter(SocialPost.id == post_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Post not found")
