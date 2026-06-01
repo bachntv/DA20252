@@ -1,0 +1,52 @@
+.purchased-hero {
+  background: linear-gradient(135deg, #0f8b8d, #2f80ed);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: #fff;
+  margin-bottom: 24px;
+  min-height: 170px;
+  overflow: hidden;
+  padding: 28px;
+  position: relative;
+}
+
+.purchased-hero::after {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  bottom: -38px;
+  content: "";
+  height: 154px;
+  position: absolute;
+  right: 34px;
+  transform: rotate(18deg);
+  width: 154px;
+}
+
+.purchased-hero span,
+.purchased-hero h1,
+.purchased-hero p {
+  position: relative;
+  z-index: 1;
+}
+
+.purchased-hero span {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  opacity: 0.88;
+  text-transform: uppercase;
+}
+
+.purchased-hero h1 {
+  font-size: 48px;
+  line-height: 1;
+  margin: 0;
+}
+
+.purchased-hero p {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 14px 0 0;
+  opacity: 0.88;
+}

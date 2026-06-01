@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/Navbar.css";
-import { FaBell, FaChevronDown, FaHome, FaUsers } from "react-icons/fa";
+import { FaBell, FaChevronDown, FaCompass, FaHome, FaUsers } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { jwtDecode } from "jwt-decode"; 
 import { authFetch } from "../utils/authFetch";
@@ -148,6 +148,13 @@ const Navbar = ({ username, profilePicture }) => {
     setSearchType(type);
   };
 
+  const openBrowse = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearchTerm("");
+    setShowDropdown(false);
+    navigate("/search?browse=1");
+  };
+
   return (
     <header className="navbar">
       <div className="nav-left">
@@ -175,7 +182,7 @@ const Navbar = ({ username, profilePicture }) => {
             onChange={(e) => {
               setSearchTerm(e.target.value);
               if (searchType !== "Emotion") {
-                window.history.pushState(null, "", `/search?query=${encodeURIComponent(e.target.value)}&filter_by=${searchType.toLowerCase()}`);
+                navigate(`/search?query=${encodeURIComponent(e.target.value)}&filter_by=${searchType.toLowerCase()}`);
               }
             }}
             onKeyDown={(e) => {
@@ -208,6 +215,14 @@ const Navbar = ({ username, profilePicture }) => {
               ))}
             </div>
           </div>
+          <button
+            className={`browse-button ${location.pathname.includes("/search") && location.search.includes("browse=") ? "active" : ""}`}
+            type="button"
+            onClick={openBrowse}
+          >
+            <FaCompass />
+            Browse
+          </button>
         </div>
       </div>
 

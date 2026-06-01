@@ -53,6 +53,11 @@ const SocialFeed = () => {
   }, [fetchFeed]);
 
   useEffect(() => {
+    window.addEventListener("socialFeedUpdated", fetchFeed);
+    return () => window.removeEventListener("socialFeedUpdated", fetchFeed);
+  }, [fetchFeed]);
+
+  useEffect(() => {
     const timer = setTimeout(fetchUsers, 250);
     return () => clearTimeout(timer);
   }, [fetchUsers]);

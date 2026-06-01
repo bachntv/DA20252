@@ -19,6 +19,55 @@ const PERIOD_LABELS = {
   month: "Last 30 Days",
 };
 
+const ADMIN_VIEW_GROUPS = [
+  {
+    title: "Reports",
+    items: [
+      { key: OVERVIEW_KEY, label: "Overview" },
+      { key: TOP_SONGS_KEY, label: "Top Songs" },
+      { key: TOP_USERS_KEY, label: "Top Users" },
+    ],
+  },
+  {
+    title: "Billing",
+    items: [
+      { key: PAYMENTS_KEY, label: "Payments" },
+      { key: SUBSCRIPTIONS_KEY, label: "Subscriptions" },
+      { key: NOTIFICATIONS_KEY, label: "Notifications" },
+    ],
+  },
+];
+
+const TABLE_CATEGORY_RULES = [
+  { title: "Commerce", keywords: ["payment", "plan", "subscription", "purchase", "billing"] },
+  { title: "Music", keywords: ["song", "album", "artist", "playlist", "track"] },
+  { title: "Users", keywords: ["user", "settings", "security", "activity"] },
+  { title: "Social", keywords: ["social", "follow", "like", "comment", "post", "notification"] },
+];
+
+const formatTableName = (name) =>
+  name
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const categorizeTables = (tableNames) => {
+  const groups = TABLE_CATEGORY_RULES.map((rule) => ({ title: rule.title, keywords: rule.keywords, items: [] }));
+  const otherGroup = { title: "System Tables", items: [] };
+
+  tableNames.forEach((table) => {
+    const normalized = table.toLowerCase();
+    const category = groups.find((group) =>
+      group.keywords.some((keyword) => normalized.includes(keyword))
+    ) || otherGroup;
+    category.items.push({ key: table, label: formatTableName(table) });
+  });
+
+  return [...groups, otherGroup]
+    .filter((group) => group.items.length > 0)
+    .map(({ keywords, ...group }) => group);
+};
+
 const AdminCrud = () => {
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState(OVERVIEW_KEY);
@@ -515,32 +564,76 @@ const AdminCrud = () => {
     loadOverview();
   };
 
+  const tableGroups = categorizeTables(tables);
+
+  const overviewMetricGroups = [
+    {
+      title: "Catalog",
+      metrics: [
+        { label: "Songs", value: overview.songs },
+        { label: "Active Songs", value: dashboardMetrics.active_songs },
+        { label: "Inactive Songs", value: dashboardMetrics.inactive_songs },
+        { label: "Albums", value: overview.albums },
+        { label: "Artists", value: overview.artists },
+        { label: "Playlists", value: overview.playlists },
+      ],
+    },
+    {
+      title: "Users",
+      metrics: [
+        { label: "Users", value: overview.users },
+        { label: "Free Users", value: dashboardMetrics.free_users },
+        { label: "Premium Users", value: dashboardMetrics.premium_users },
+        { label: "Active Subs", value: dashboardMetrics.active_subscriptions },
+        { label: "Expiring Soon", value: dashboardMetrics.expiring_subscriptions },
+      ],
+    },
+    {
+      title: "Payments",
+      metrics: [
+        { label: "Payments", value: dashboardMetrics.total_payments },
+        { label: "Revenue", value: dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue },
+        { label: "Success Rate", value: dashboardMetrics.payment_success_rate != null ? `${dashboardMetrics.payment_success_rate}%` : undefined },
+        { label: "Pending", value: dashboardMetrics.pending_payments },
+        { label: "Failed", value: dashboardMetrics.failed_payments },
+      ],
+    },
+  ];
+
+  const renderSidebarSection = (section) => (
+    <div className="nav-section" key={section.title}>
+      <div className="nav-section-title">{section.title}</div>
+      <ul>
+        {section.items.map((item) => (
+          <li
+            key={item.key}
+            className={selectedTable === item.key ? "active" : ""}
+            onClick={() => setSelectedTable(item.key)}
+          >
+            <span>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
   const renderOverview = () => (
     <div className="overview">
       <h2>Overview</h2>
-      <div className="overview-cards">
-        <div className="card"><h3>Users</h3><p>{overview.users ?? "..."}</p></div>
-        <div className="card"><h3>Songs</h3><p>{overview.songs ?? "..."}</p></div>
-        <div className="card"><h3>Active Songs</h3><p>{dashboardMetrics.active_songs ?? "..."}</p></div>
-        <div className="card"><h3>Inactive Songs</h3><p>{dashboardMetrics.inactive_songs ?? "..."}</p></div>
-        <div className="card"><h3>Playlists</h3><p>{overview.playlists ?? "..."}</p></div>
-        <div className="card"><h3>Albums</h3><p>{overview.albums ?? "..."}</p></div>
-        <div className="card"><h3>Active Albums</h3><p>{dashboardMetrics.active_albums ?? "..."}</p></div>
-        <div className="card"><h3>Inactive Albums</h3><p>{dashboardMetrics.inactive_albums ?? "..."}</p></div>
-        <div className="card"><h3>Artists</h3><p>{overview.artists ?? "..."}</p></div>
-        <div className="card"><h3>Active Artists</h3><p>{dashboardMetrics.active_artists ?? "..."}</p></div>
-        <div className="card"><h3>Inactive Artists</h3><p>{dashboardMetrics.inactive_artists ?? "..."}</p></div>
-        <div className="card"><h3>Payments</h3><p>{dashboardMetrics.total_payments ?? "..."}</p></div>
-        <div className="card"><h3>Success Rate</h3><p>{dashboardMetrics.payment_success_rate ?? "..."}%</p></div>
-        <div className="card"><h3>Pending Rate</h3><p>{dashboardMetrics.payment_pending_rate ?? "..."}%</p></div>
-        <div className="card"><h3>Failed Rate</h3><p>{dashboardMetrics.payment_failed_rate ?? "..."}%</p></div>
-        <div className="card"><h3>Pending Payments</h3><p>{dashboardMetrics.pending_payments ?? "..."}</p></div>
-        <div className="card"><h3>Failed Payments</h3><p>{dashboardMetrics.failed_payments ?? "..."}</p></div>
-        <div className="card"><h3>Revenue</h3><p>{dashboardMetrics.total_revenue?.toLocaleString?.("vi-VN") ?? dashboardMetrics.total_revenue ?? "..."}</p></div>
-        <div className="card"><h3>Free Users</h3><p>{dashboardMetrics.free_users ?? "..."}</p></div>
-        <div className="card"><h3>Premium Users</h3><p>{dashboardMetrics.premium_users ?? "..."}</p></div>
-        <div className="card"><h3>Active Subs</h3><p>{dashboardMetrics.active_subscriptions ?? "..."}</p></div>
-        <div className="card"><h3>Expiring Soon</h3><p>{dashboardMetrics.expiring_subscriptions ?? "..."}</p></div>
+      <div className="overview-groups">
+        {overviewMetricGroups.map((group) => (
+          <section className="metric-group" key={group.title}>
+            <h3>{group.title}</h3>
+            <div className="metric-grid">
+              {group.metrics.map((metric) => (
+                <div className="metric-tile" key={metric.label}>
+                  <span>{metric.label}</span>
+                  <strong>{metric.value ?? "..."}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
 
       <div style={{ marginTop: "32px" }}>
@@ -1311,53 +1404,10 @@ const AdminCrud = () => {
           Back to Home
         </button>
         <h2>Admin Views</h2>
-        <ul>
-          <li
-            className={selectedTable === OVERVIEW_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(OVERVIEW_KEY)}
-          >
-            Overview
-          </li>
-          <li
-            className={selectedTable === TOP_SONGS_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(TOP_SONGS_KEY)}
-          >
-            Top Songs
-          </li>
-          <li
-            className={selectedTable === TOP_USERS_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(TOP_USERS_KEY)}
-          >
-            Top Users
-          </li>
-          <li
-            className={selectedTable === PAYMENTS_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(PAYMENTS_KEY)}
-          >
-            Payments
-          </li>
-          <li
-            className={selectedTable === SUBSCRIPTIONS_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(SUBSCRIPTIONS_KEY)}
-          >
-            Subscriptions
-          </li>
-          <li
-            className={selectedTable === NOTIFICATIONS_KEY ? "active" : ""}
-            onClick={() => setSelectedTable(NOTIFICATIONS_KEY)}
-          >
-            Notifications
-          </li>
-          {tables.map((table) => (
-            <li
-              key={table}
-              className={selectedTable === table ? "active" : ""}
-              onClick={() => setSelectedTable(table)}
-            >
-              {table}
-            </li>
-          ))}
-        </ul>
+        <nav className="admin-nav">
+          {ADMIN_VIEW_GROUPS.map(renderSidebarSection)}
+          {tableGroups.map(renderSidebarSection)}
+        </nav>
       </aside>
 
       <main className="main">

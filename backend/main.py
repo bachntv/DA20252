@@ -18,6 +18,7 @@ from models.subscription import Subscription
 from models.payment import Payment
 from models.notification_log import NotificationLog
 from models.social import SocialComment, SocialFollow, SocialLike, SocialPost, SocialShare
+from models.song_purchase import SongPurchase
 from routes.auth_routes import router as auth_router
 from routes.music_routes import router as music_router
 from routes.user_routes import router as user_router
@@ -55,6 +56,9 @@ with engine.begin() as conn:
     conn.execute(text("ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()"))
     conn.execute(text("ALTER TABLE songs ADD COLUMN IF NOT EXISTS lyrics TEXT"))
     conn.execute(text("ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS image_url VARCHAR"))
+    conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 15000"))
+    conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS currency VARCHAR NOT NULL DEFAULT 'VND'"))
+    conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'owned'"))
 
 db = SessionLocal()
 try:

@@ -11,11 +11,11 @@
 }
 
 .sidebar {
-  width: 240px;
+  width: 280px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  padding: 24px;
+  padding: 18px;
   overflow-y: auto;
   border-right: var(--glass-border);
 }
@@ -41,36 +41,67 @@
 }
 
 .sidebar h2 {
-  font-size: 18px;
-  margin-bottom: 12px;
+  font-size: 16px;
+  margin: 12px 0 14px;
   color: var(--text-primary);
   font-weight: 600;
 }
 
-.sidebar ul {
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nav-section {
+  border-top: 1px solid var(--border-light);
+  padding-top: 10px;
+}
+
+.nav-section-title {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px 8px;
+  text-transform: uppercase;
+}
+
+.nav-section ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
-.sidebar li {
-  padding: 12px 16px;
+.nav-section li {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
   cursor: pointer;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   transition: all var(--transition-normal);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
-.sidebar li:hover,
-.sidebar li.active {
+.nav-section li:hover,
+.nav-section li.active {
   background: rgba(168, 230, 207, 0.2);
   color: var(--text-primary);
 }
 
+.nav-section li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .main {
   width: 100%;
-  padding: 32px;
+  padding: 24px;
   overflow-y: auto;
 }
 
@@ -82,8 +113,8 @@
 }
 
 .main h2 {
-  margin-top: 32px;
-  font-size: 20px;
+  margin-top: 24px;
+  font-size: 18px;
   color: var(--accent-primary-hover);
   font-weight: 600;
 }
@@ -155,8 +186,8 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 20px;
-  font-size: 14px;
+  margin-top: 14px;
+  font-size: 13px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -169,7 +200,7 @@
 .data-table td {
   border: none;
   border-bottom: 1px solid var(--border-light);
-  padding: 14px 16px;
+  padding: 10px 12px;
   text-align: left;
 }
 
@@ -210,50 +241,62 @@
 
 /* Overview Section */
 .overview {
-  margin: 28px 0;
+  margin: 18px 0;
 }
 
-.overview-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+.overview-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
   margin-top: 16px;
 }
 
-.card {
+.metric-group {
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: var(--glass-border);
   color: var(--text-primary);
-  padding: 20px 24px;
-  border-radius: var(--radius-lg);
-  flex: 1 1 calc(25% - 20px);
+  padding: 14px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  min-width: 200px;
-  transition: all var(--transition-normal);
 }
 
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.card h3 {
-  margin: 0 0 10px;
+.metric-group h3 {
+  color: var(--text-primary);
   font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
+  margin: 0 0 10px;
 }
 
-.card p {
-  font-size: 1.8rem;
-  margin: 0;
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric-tile {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  min-height: 58px;
+  padding: 9px 10px;
+}
+
+.metric-tile span {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 11px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin-bottom: 5px;
+}
+
+.metric-tile strong {
+  color: var(--text-primary);
+  display: block;
+  font-size: 1.2rem;
+  line-height: 1.1;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .report-header {

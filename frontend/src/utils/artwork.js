@@ -29,7 +29,7 @@ const initials = (value = "", fallback = "M") => {
 
 export const getArtworkPalette = (seed = "") => {
   const hash = hashString(seed);
-  return ARTWORK_PALETTES[hash % ARTWORK_PALETTES.length];
+  return ARTWORK_PALETTES[hash % ARTWORK_PALETTES.length] || ARTWORK_PALETTES[0];
 };
 
 const svgDataUri = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -110,12 +110,13 @@ export const createArtistArtwork = (artist = {}) => {
 
 export const createAlbumArtwork = (album = {}) =>
   {
-    const title = album.name || album.album || album.title || "Album";
-    const artist = album.artist_name || album.artist || "Unknown Artist";
-    const seed = album.id || album.album_id || `${title}-${artist}`;
+    const safeAlbum = album || {};
+    const title = safeAlbum.name || safeAlbum.album || safeAlbum.title || "Album";
+    const artist = safeAlbum.artist_name || safeAlbum.artist || "Unknown Artist";
+    const seed = safeAlbum.id || safeAlbum.album_id || `${title}-${artist}`;
     const hash = hashString(seed);
     const [primary, secondary, text] = getArtworkPalette(seed);
-    const accentPalette = ARTWORK_PALETTES[(hash >> 3) % ARTWORK_PALETTES.length];
+    const accentPalette = ARTWORK_PALETTES[(hash >> 3) % ARTWORK_PALETTES.length] || ARTWORK_PALETTES[0];
     const accent = accentPalette[1] === secondary ? accentPalette[0] : accentPalette[1];
     const label = escapeSvgText(initials(title, "A"));
     const safeTitle = escapeSvgText(title);

@@ -1,6 +1,6 @@
 import React, {useEffect, useState, useRef, useCallback} from "react";
 import "../styles/SidebarLeft.css";
-import { FaPlus, FaAngleRight, FaAngleLeft, FaSearch, FaChevronDown} from "react-icons/fa";
+import { FaPlus, FaAngleRight, FaAngleLeft, FaSearch, FaChevronDown, FaShoppingBag} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import { formatDistanceToNow } from "date-fns";
@@ -345,6 +345,12 @@ const SidebarLeft = () => {
 
       {expanded ? (
         <div className="library-table">
+          {token && (
+            <button className="library-shortcut expanded-shortcut" onClick={() => navigate("/purchased")}>
+              <FaShoppingBag />
+              Purchased Songs
+            </button>
+          )}
           <div className="library-table-header">
             <span>Title</span>
             <span>Date Added</span>
@@ -450,6 +456,12 @@ const SidebarLeft = () => {
           <div className="playlist-list">
             {!token && (
               <div className="library-empty">Log in to see your library.</div>
+            )}
+            {token && (
+              <button className="library-shortcut" onClick={() => navigate("/purchased")}>
+                <FaShoppingBag />
+                <span>Purchased Songs</span>
+              </button>
             )}
             {token && filteredComponents.map((item, index) => (
               <div 

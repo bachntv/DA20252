@@ -168,6 +168,34 @@
   background: rgba(168, 230, 207, 0.15);
 }
 
+.library-shortcut {
+  align-items: center;
+  background: rgba(168, 230, 207, 0.18);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  transition: all var(--transition-normal);
+  width: 100%;
+}
+
+.library-shortcut:hover {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  transform: translateY(-1px);
+}
+
+.expanded-shortcut {
+  margin: 10px 16px 12px;
+  width: calc(100% - 32px);
+}
+
 .playlist-item1 {
   display: flex;
   align-items: center;

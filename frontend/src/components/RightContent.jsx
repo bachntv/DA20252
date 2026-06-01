@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import "../styles/RightContent.css";
 import { usePlayer } from "../context/PlayerContext";
-import { FaTimes } from "react-icons/fa";
+import { FaShareAlt, FaTimes } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
 import { authFetch } from '../utils/authFetch';
 import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
@@ -32,6 +32,9 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
   const [lyricsDraft, setLyricsDraft] = useState("");
   const [artistInfo, setArtistInfo] = useState(null);
   const [isArtistFollowed, setIsArtistFollowed] = useState(false);
+  const [purchaseState, setPurchaseState] = useState({ owned: false, amount: 15000, currency: "VND" });
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [shareState, setShareState] = useState("idle");
 
   const fetchMp3Url = async (trackName) => {
     try {
@@ -97,6 +100,29 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
 
     fetchLyrics();
   }, [currentSong?.id]);
+
+  useEffect(() => {
+    if (!currentSong?.id || !userId) {
+      setPurchaseState({ owned: false, amount: 15000, currency: "VND" });
+      return;
+    }
+
+    const fetchPurchaseState = async () => {
+      try {
+        const res = await authFetch(`${API_BASE}/api/music/user/purchases/${currentSong.id}`);
+        const data = await res.json();
+        setPurchaseState({
+          owned: Boolean(data.owned),
+          amount: data.amount || 15000,
+          currency: data.currency || "VND",
+        });
+      } catch (err) {
+        setPurchaseState({ owned: false, amount: 15000, currency: "VND" });
+      }
+    };
+
+    fetchPurchaseState();
+  }, [currentSong?.id, userId]);
 
   useEffect(() => {
     const artistId = getPrimaryArtistId(currentSong);
@@ -174,6 +200,51 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
       setIsEditingLyrics(false);
     } catch (err) {
       console.error("Failed to save lyrics", err);
+    }
+  };
+
+  const purchaseCurrentSong = async () => {
+    if (!currentSong?.id || !userId || isPurchasing) return;
+    setIsPurchasing(true);
+    try {
+      const res = await authFetch(`${API_BASE}/api/music/user/purchases/${currentSong.id}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      setPurchaseState({
+        owned: Boolean(data.owned),
+        amount: data.track?.amount || purchaseState.amount,
+        currency: data.track?.currency || purchaseState.currency,
+      });
+      window.dispatchEvent(new Event("purchaseUpdated"));
+    } catch (err) {
+      console.error("Failed to purchase song", err);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const shareCurrentSong = async () => {
+    if (!currentSong?.id || !userId || shareState === "sharing") return;
+
+    const title = currentSong.track_name || currentSong.title || "this song";
+    const artist = currentSong.artist_name || currentSong.artist;
+    const content = artist ? `Listening to "${title}" by ${artist}` : `Listening to "${title}"`;
+
+    setShareState("sharing");
+    try {
+      await authFetch(`${API_BASE}/api/social/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, track_id: currentSong.id }),
+      });
+      setShareState("shared");
+      window.dispatchEvent(new Event("socialFeedUpdated"));
+      window.setTimeout(() => setShareState("idle"), 1800);
+    } catch (err) {
+      console.error("Failed to share current song", err);
+      setShareState("error");
+      window.setTimeout(() => setShareState("idle"), 2400);
     }
   };
 
@@ -307,6 +378,37 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
       <div className="overlay-content">
         <h1 className="song-title">{currentSong.track_name || currentSong.title}</h1>
         <p className="song-artist">{currentSong.artist_name || currentSong.artist}</p>
+        <div className="song-actions">
+          <button
+            className={`share-song-button ${shareState === "shared" ? "shared" : ""}`}
+            onClick={shareCurrentSong}
+            disabled={!userId || shareState === "sharing"}
+            title={!userId ? "Log in to share songs" : "Share song on social feed"}
+          >
+            <FaShareAlt />
+            {shareState === "sharing"
+              ? "Sharing..."
+              : shareState === "shared"
+                ? "Shared"
+                : shareState === "error"
+                  ? "Try Again"
+                  : "Share to Feed"}
+          </button>
+        </div>
+        <div className="purchase-section">
+          <div>
+            <span className="purchase-label">Digital ownership</span>
+            <strong>{purchaseState.amount.toLocaleString("vi-VN")} {purchaseState.currency}</strong>
+          </div>
+          <button
+            className={`purchase-button ${purchaseState.owned ? "owned" : ""}`}
+            onClick={purchaseCurrentSong}
+            disabled={!userId || purchaseState.owned || isPurchasing}
+            title={!userId ? "Log in to buy songs" : purchaseState.owned ? "You own this song" : "Buy this song"}
+          >
+            {purchaseState.owned ? "Owned" : isPurchasing ? "Buying..." : "Buy Song"}
+          </button>
+        </div>
 
         <div className="related-section">
           <div className="lyrics-section">

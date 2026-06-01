@@ -431,6 +431,32 @@
   transform: rotate(180deg);
 }
 
+.browse-button {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px;
+  transition: all var(--transition-normal);
+}
+
+.browse-button:hover,
+.browse-button.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+  transform: translateY(-1px);
+}
+
 /* Emotion Results Modal */
 .emotion-results-modal {
   position: fixed;

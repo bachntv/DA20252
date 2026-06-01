@@ -13,6 +13,7 @@ import ArtistPage from "./components/MainContent/ArtistPage";
 import ChartPage from "./components/MainContent/ChartPage";
 import SearchPage from "./components/MainContent/SearchPage";
 import SocialFeed from "./components/MainContent/SocialFeed";
+import PurchasedSongs from "./components/MainContent/PurchasedSongs";
 import AdminCrud from "./pages/AdminCrud";
 import SettingsPage from "./pages/Settings";
 import PremiumPage from "./pages/Premium";
@@ -35,6 +36,7 @@ function App() {
             <Route path="chart/:chartId" element={<ChartPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="social" element={<SocialFeed />} />
+            <Route path="purchased" element={<ProtectedRoute><PurchasedSongs /></ProtectedRoute>} />
           </Route>
 
           {/* ✅ Full-page route for /database, still protected */}

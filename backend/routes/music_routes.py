@@ -6,6 +6,8 @@ from models.base import SessionLocal
 from models.playlist import Playlist
 from models.playlist_user import PlaylistUser
 from models.listening_history import ListeningHistory
+from models.payment import Payment
+from models.song_purchase import SongPurchase
 from schemas.album import AlbumResponse
 from schemas.track import TrackResponse
 from schemas.user import UserResponse
@@ -51,6 +53,45 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def serialize_purchase_track(row):
+    return {
+        "id": row[0],
+        "title": row[1],
+        "artist_id": row[2],
+        "artist": row[3],
+        "album_id": row[4],
+        "album": row[5],
+        "duration": format_duration(row[6]),
+        "cover_url": row[7],
+        "amount": row[8],
+        "currency": row[9],
+        "purchased_at": row[10].isoformat() if row[10] else None,
+    }
+
+
+def get_track_purchase_row(db: Session, track_id: str, user_id: str):
+    return db.execute(text("""
+        SELECT s.track_id, s.track_name,
+               STRING_AGG(DISTINCT at.id, ', ') AS artist_id,
+               STRING_AGG(DISTINCT at.name, ', ') AS artist_name,
+               ab.id AS album_id, ab.name AS album_name,
+               MAX(s.duration_ms) AS duration_ms,
+               MAX(s.track_image_url) AS track_image_url,
+               sp.amount, sp.currency, sp.created_at
+        FROM song_purchases sp
+        JOIN songs s ON s.track_id = sp.track_id
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE sp.track_id = :track_id
+          AND sp.user_id = :user_id
+          AND s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+        GROUP BY s.track_id, s.track_name, ab.id, ab.name, sp.amount, sp.currency, sp.created_at
+        LIMIT 1
+    """), {"track_id": track_id, "user_id": user_id}).fetchone()
 
 
 @router.post("/user/listening-history")
@@ -121,6 +162,96 @@ def get_listening_history(
             "played_at": row[4].isoformat() if row[4] else None,
         })
     return history
+
+
+@router.get("/user/purchases")
+def get_purchased_songs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = db.execute(text("""
+        SELECT s.track_id, s.track_name,
+               STRING_AGG(DISTINCT at.id, ', ') AS artist_id,
+               STRING_AGG(DISTINCT at.name, ', ') AS artist_name,
+               ab.id AS album_id, ab.name AS album_name,
+               MAX(s.duration_ms) AS duration_ms,
+               MAX(s.track_image_url) AS track_image_url,
+               sp.amount, sp.currency, sp.created_at
+        FROM song_purchases sp
+        JOIN songs s ON s.track_id = sp.track_id
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE sp.user_id = :user_id
+          AND s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+        GROUP BY s.track_id, s.track_name, ab.id, ab.name, sp.amount, sp.currency, sp.created_at
+        ORDER BY sp.created_at DESC
+    """), {"user_id": current_user.id}).fetchall()
+
+    return [serialize_purchase_track(row) for row in rows]
+
+
+@router.get("/user/purchases/{track_id}")
+def get_purchase_status(
+    track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    purchase = db.query(SongPurchase).filter(
+        SongPurchase.user_id == current_user.id,
+        SongPurchase.track_id == track_id,
+    ).first()
+    return {
+        "owned": purchase is not None,
+        "purchased_at": purchase.created_at.isoformat() if purchase else None,
+        "amount": purchase.amount if purchase else 15000,
+        "currency": purchase.currency if purchase else "VND",
+    }
+
+
+@router.post("/user/purchases/{track_id}")
+def purchase_song(
+    track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    track_exists = db.execute(text("""
+        SELECT 1
+        FROM songs s
+        JOIN artists at ON at.id = s.artist_id
+        JOIN albums ab ON ab.id = s.album_id
+        WHERE s.track_id = :track_id
+          AND s.is_active = TRUE
+          AND at.is_active = TRUE
+          AND ab.is_active = TRUE
+        LIMIT 1
+    """), {"track_id": track_id}).fetchone()
+    if not track_exists:
+        raise HTTPException(status_code=404, detail="Track is unavailable")
+
+    purchase = db.query(SongPurchase).filter(
+        SongPurchase.user_id == current_user.id,
+        SongPurchase.track_id == track_id,
+    ).first()
+
+    if not purchase:
+        purchase = SongPurchase(user_id=current_user.id, track_id=track_id, amount=15000, currency="VND")
+        db.add(purchase)
+        db.add(Payment(
+            user_id=current_user.id,
+            amount=15000,
+            currency="VND",
+            provider="demo-wallet",
+            status="paid",
+            note=f"Purchased song {track_id}",
+        ))
+        log_activity(db, current_user.id, "purchase_song", "track", track_id, "Purchased song access")
+        db.commit()
+
+    row = get_track_purchase_row(db, track_id, current_user.id)
+    return {"owned": True, "track": serialize_purchase_track(row) if row else None}
+
 
 ### Playlist API
 @router.get("/user_playlist", response_model=List[PlaylistResponse])
