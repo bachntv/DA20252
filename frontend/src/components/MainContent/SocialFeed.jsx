@@ -4,10 +4,11 @@ import {
   FaCheck,
   FaComment,
   FaEdit,
+  FaExpand,
   FaHeart,
-  FaImage,
   FaMusic,
   FaPaperPlane,
+  FaPlus,
   FaRegHeart,
   FaRetweet,
   FaSave,
@@ -25,8 +26,19 @@ import "../../styles/MainContent/SocialFeed.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
+const getStoredUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem("user") || "{}");
+  } catch (err) {
+    return {};
+  }
+};
+
 const SocialFeed = () => {
-  const { currentSong } = usePlayer();
+  const user = getStoredUser();
+  const username = user?.username || "You";
+  const { currentSong, playSong } = usePlayer();
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const [scope, setScope] = useState("all");
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
@@ -43,6 +55,7 @@ const SocialFeed = () => {
   const [storyPreview, setStoryPreview] = useState("");
   const [storyContent, setStoryContent] = useState("");
   const [storyAttachSong, setStoryAttachSong] = useState(false);
+  const [storyType, setStoryType] = useState("story");
   const [comments, setComments] = useState({});
   const [shareText, setShareText] = useState({});
   const [users, setUsers] = useState([]);
@@ -198,6 +211,7 @@ const SocialFeed = () => {
     try {
       const formData = new FormData();
       formData.append("content", storyContent);
+      formData.append("story_type", storyType);
       if (trackId) formData.append("track_id", trackId);
       if (storyFile) formData.append("image", storyFile);
       await authFetch(`${API_BASE}/api/social/stories/photo`, {
@@ -207,6 +221,7 @@ const SocialFeed = () => {
       setStoryContent("");
       setStoryFile(null);
       setStoryAttachSong(false);
+      setStoryType("story");
       fetchStories();
     } catch (err) {
       console.error("Failed to create story", err);
@@ -399,10 +414,30 @@ const SocialFeed = () => {
     }
   };
 
+  const playTrack = async (track) => {
+    if (!track?.id && !track?.title) return;
+
+    const title = track.track_name || track.title;
+    try {
+      const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(title)}`);
+      const data = await res.json();
+      playSong({
+        ...track,
+        id: track.id || track.track_id,
+        track_name: title,
+        title,
+        artist: track.artist || track.artist_name || "Shared song",
+        mp3_url: data.url,
+      });
+    } catch (err) {
+      console.error("Failed to play shared song", err);
+    }
+  };
+
   const renderTrack = (track) => {
     if (!track) return null;
     return (
-      <div className="social-track">
+      <button className="social-track playable-track" onClick={() => playTrack(track)} title="Play this song">
         <img
           src={getTrackArtwork(track)}
           alt={track.title}
@@ -413,9 +448,9 @@ const SocialFeed = () => {
         />
         <div>
           <p>{track.title}</p>
-          <span>{track.duration || "Song"}</span>
+          <span>{track.duration || "Song"} · Click to play</span>
         </div>
-      </div>
+      </button>
     );
   };
 
@@ -443,7 +478,16 @@ const SocialFeed = () => {
     : null;
 
   return (
-    <div className="social-page facebook-shell">
+    <div
+      className={isFocusMode ? "social-focus-backdrop" : ""}
+      onMouseDown={(event) => {
+        if (isFocusMode && event.target === event.currentTarget) setIsFocusMode(false);
+      }}
+    >
+      <div
+        className={`social-page facebook-shell ${isFocusMode ? "is-focused" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
       <aside className="social-left-rail">
         <h2>Social</h2>
         <button className="rail-item active"><FaUserFriends /> Feed</button>
@@ -462,61 +506,75 @@ const SocialFeed = () => {
             <p>Posts, songs, friends, and stories from your circle.</p>
           </div>
           <div className="scope-toggle">
+            <button
+              className="focus-feed-button"
+              onClick={() => setIsFocusMode((current) => !current)}
+              title={isFocusMode ? "Close focus view" : "Focus feed"}
+            >
+              {isFocusMode ? <FaTimes /> : <FaExpand />}
+              {isFocusMode ? "Close" : "Focus"}
+            </button>
             <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
             <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
           </div>
         </div>
 
         <section className="stories-card">
-          <div className="story-composer">
-            <label className="story-upload">
-              <FaImage />
-              <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
-            </label>
-            <input
-              value={storyContent}
-              onChange={(e) => setStoryContent(e.target.value)}
-              placeholder="Create a story"
-            />
-            <label className="story-song-toggle">
-              <input
-                type="checkbox"
-                checked={storyAttachSong}
-                onChange={(e) => setStoryAttachSong(e.target.checked)}
-              />
-              Song
-            </label>
-            <button onClick={createStory}>Share</button>
-          </div>
-          {storyPreview && (
-            <div className="story-preview">
-              <img src={storyPreview} alt="Story preview" />
-              <button onClick={() => setStoryFile(null)}><FaTimes /></button>
-            </div>
-          )}
           <div className="story-tray">
-            {stories.length === 0 ? (
-              <div className="story-tile empty-story">No stories yet</div>
-            ) : (
-              stories.map((story) => (
-                <div className="story-tile" key={story.id}>
-                  {story.image_url ? <img src={story.image_url} alt="Story" /> : <div className="story-gradient" />}
-                  <div className="story-overlay">
-                    <strong>{story.author.username}</strong>
-                    <span>{story.content || story.track?.title || "Shared a story"}</span>
-                  </div>
+            <article className="story-tile create-story-tile">
+              <div className="create-story-media">
+                {storyPreview ? <img src={storyPreview} alt="Story preview" /> : <div className="create-story-avatar">{username?.[0]?.toUpperCase()}</div>}
+                {storyPreview && <button className="clear-story-preview" onClick={() => setStoryFile(null)}><FaTimes /></button>}
+              </div>
+              <label className="create-story-plus" title="Upload photo">
+                <FaPlus />
+                <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
+              </label>
+              <div className="create-story-controls">
+                <strong>Create story</strong>
+                <div className="story-type-toggle">
+                  <button className={storyType === "story" ? "active" : ""} onClick={() => setStoryType("story")}>Story</button>
+                  <button className={storyType === "reel" ? "active" : ""} onClick={() => setStoryType("reel")}>Reel</button>
                 </div>
-              ))
-            )}
+                <input
+                  value={storyContent}
+                  onChange={(e) => setStoryContent(e.target.value)}
+                  placeholder={storyType === "story" ? "Lasts 24 hours" : "Stays on feed"}
+                />
+                <label className="story-song-toggle">
+                  <input
+                    type="checkbox"
+                    checked={storyAttachSong}
+                    onChange={(e) => setStoryAttachSong(e.target.checked)}
+                  />
+                  Song
+                </label>
+                <button className="create-story-share" onClick={createStory}>Share</button>
+              </div>
+            </article>
+            {stories.map((story) => (
+              <article className="story-tile" key={story.id}>
+                {story.image_url ? <img src={story.image_url} alt="Story" /> : <div className="story-gradient" />}
+                <div className="story-type-badge">{story.story_type === "reel" ? "Reel" : "Story"}</div>
+                <div className="story-owner-avatar">{story.author.username?.[0]?.toUpperCase()}</div>
+                <div className="story-overlay">
+                  <strong>{story.author.username}</strong>
+                  <span>{story.content || story.track?.title || "Shared a story"}</span>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
         <section className="composer">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind?"
-          />
+          <div className="composer-prompt-row">
+            <div className="post-avatar">{username?.[0]?.toUpperCase()}</div>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder={`What's on your mind, ${username}?`}
+            />
+          </div>
           <div className="composer-actions">
             <div className="composer-options">
               <label className="composer-pill">
@@ -533,7 +591,7 @@ const SocialFeed = () => {
                 <input type="file" accept="image/*" onChange={handlePhotoChange} />
               </label>
             </div>
-            <button onClick={createPost} disabled={!content.trim() && !photoFile}>Post</button>
+            <button className="composer-post-button" onClick={createPost} disabled={!content.trim() && !photoFile}>Post</button>
           </div>
           {photoPreview && (
             <div className="composer-photo-preview">
@@ -785,6 +843,7 @@ const SocialFeed = () => {
           </div>
         </section>
       )}
+      </div>
     </div>
   );
 };

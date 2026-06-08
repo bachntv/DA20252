@@ -72,6 +72,7 @@ with engine.begin() as conn:
     conn.execute(text("ALTER TABLE songs ADD COLUMN IF NOT EXISTS uploaded_by_user_id VARCHAR"))
     conn.execute(text("ALTER TABLE artists ADD COLUMN IF NOT EXISTS owner_user_id VARCHAR"))
     conn.execute(text("ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS image_url VARCHAR"))
+    conn.execute(text("ALTER TABLE social_stories ADD COLUMN IF NOT EXISTS story_type VARCHAR NOT NULL DEFAULT 'story'"))
     conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 15000"))
     conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS currency VARCHAR NOT NULL DEFAULT 'VND'"))
     conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'owned'"))

@@ -159,6 +159,7 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         "content": story.content,
         "image_url": story.image_url,
         "track": track_public(db, story.track_id),
+        "story_type": story.story_type,
         "created_at": story.created_at.isoformat(),
         "author": user_summary(db, story.user_id),
         "is_owner": story.user_id == current_user_id,
@@ -480,7 +481,10 @@ def get_stories(db: Session = Depends(get_db), current_user: User = Depends(get_
 
     stories = (
         db.query(SocialStory)
-        .filter(SocialStory.user_id.in_(visible_user_ids), SocialStory.created_at >= since)
+        .filter(
+            SocialStory.user_id.in_(visible_user_ids),
+            or_(SocialStory.story_type == "reel", SocialStory.created_at >= since),
+        )
         .order_by(SocialStory.created_at.desc())
         .limit(40)
         .all()
@@ -493,12 +497,16 @@ async def create_story(
     request: Request,
     content: str = Form(""),
     track_id: str | None = Form(None),
+    story_type: str = Form("story"),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_not_muted(current_user)
     story_content = content.strip()
+    clean_story_type = story_type.strip().lower()
+    if clean_story_type not in {"story", "reel"}:
+        raise HTTPException(status_code=400, detail="Story type must be story or reel")
     if not story_content and not image and not track_id:
         raise HTTPException(status_code=400, detail="Story content, photo, or song is required")
 
@@ -511,6 +519,7 @@ async def create_story(
         content=story_content,
         image_url=image_url,
         track_id=track_id,
+        story_type=clean_story_type,
     )
     db.add(story)
     db.commit()
