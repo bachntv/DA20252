@@ -56,8 +56,11 @@ const SocialFeed = () => {
   const [storyContent, setStoryContent] = useState("");
   const [storyAttachSong, setStoryAttachSong] = useState(false);
   const [storyType, setStoryType] = useState("story");
+  const [isStoryCreatorOpen, setIsStoryCreatorOpen] = useState(false);
+  const [storyCreatorStep, setStoryCreatorStep] = useState("type");
   const [comments, setComments] = useState({});
-  const [shareText, setShareText] = useState({});
+  const [shareDialogPost, setShareDialogPost] = useState(null);
+  const [shareDraft, setShareDraft] = useState("");
   const [users, setUsers] = useState([]);
   const [userQuery, setUserQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -222,6 +225,8 @@ const SocialFeed = () => {
       setStoryFile(null);
       setStoryAttachSong(false);
       setStoryType("story");
+      setIsStoryCreatorOpen(false);
+      setStoryCreatorStep("type");
       fetchStories();
     } catch (err) {
       console.error("Failed to create story", err);
@@ -238,6 +243,15 @@ const SocialFeed = () => {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
     setStoryFile(file);
+  };
+
+  const closeStoryCreator = () => {
+    setIsStoryCreatorOpen(false);
+    setStoryCreatorStep("type");
+    setStoryContent("");
+    setStoryFile(null);
+    setStoryAttachSong(false);
+    setStoryType("story");
   };
 
   const toggleLike = async (postId) => {
@@ -328,16 +342,28 @@ const SocialFeed = () => {
     }
   };
 
-  const sharePost = async (postId) => {
+  const openShareDialog = (post) => {
+    setShareDialogPost(post);
+    setShareDraft("");
+  };
+
+  const closeShareDialog = () => {
+    setShareDialogPost(null);
+    setShareDraft("");
+  };
+
+  const sharePost = async () => {
+    if (!shareDialogPost?.id) return;
+
     try {
-      const res = await authFetch(`${API_BASE}/api/social/posts/${postId}/share`, {
+      const res = await authFetch(`${API_BASE}/api/social/posts/${shareDialogPost.id}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: shareText[postId] || "Shared a post" }),
+        body: JSON.stringify({ content: shareDraft.trim() || "Shared a post" }),
       });
       const post = await res.json();
       setPosts((prev) => [post, ...prev]);
-      setShareText((prev) => ({ ...prev, [postId]: "" }));
+      closeShareDialog();
       fetchThreads();
     } catch (err) {
       console.error("Failed to share post", err);
@@ -454,6 +480,26 @@ const SocialFeed = () => {
     );
   };
 
+  const renderStaticTrack = (track) => {
+    if (!track) return null;
+    return (
+      <div className="social-track static-track">
+        <img
+          src={getTrackArtwork(track)}
+          alt={track.title}
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = createTrackArtwork(track);
+          }}
+        />
+        <div>
+          <p>{track.title}</p>
+          <span>{track.duration || "Song"}</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderFriendButton = (user) => {
     const friendship = user.friendship || { status: "none" };
     if (friendship.status === "friends") {
@@ -489,13 +535,22 @@ const SocialFeed = () => {
         onMouseDown={(event) => event.stopPropagation()}
       >
       <aside className="social-left-rail">
-        <h2>Social</h2>
+        <div className="social-rail-title">
+          <h2>Social</h2>
+          <button
+            className="focus-feed-button"
+            onClick={() => setIsFocusMode((current) => !current)}
+            title={isFocusMode ? "Close focus view" : "Focus feed"}
+          >
+            {isFocusMode ? <FaTimes /> : <FaExpand />}
+          </button>
+        </div>
         <button className="rail-item active"><FaUserFriends /> Feed</button>
         <button className="rail-item"><FaComment /> Messages</button>
         <button className="rail-item"><FaCamera /> Stories</button>
         <div className="rail-card">
           <span>Now playing</span>
-          {currentTrack ? renderTrack(currentTrack) : <p>No song selected.</p>}
+          {currentTrack ? renderStaticTrack(currentTrack) : <p>No song selected.</p>}
         </div>
       </aside>
 
@@ -506,14 +561,6 @@ const SocialFeed = () => {
             <p>Posts, songs, friends, and stories from your circle.</p>
           </div>
           <div className="scope-toggle">
-            <button
-              className="focus-feed-button"
-              onClick={() => setIsFocusMode((current) => !current)}
-              title={isFocusMode ? "Close focus view" : "Focus feed"}
-            >
-              {isFocusMode ? <FaTimes /> : <FaExpand />}
-              {isFocusMode ? "Close" : "Focus"}
-            </button>
             <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
             <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
           </div>
@@ -523,33 +570,13 @@ const SocialFeed = () => {
           <div className="story-tray">
             <article className="story-tile create-story-tile">
               <div className="create-story-media">
-                {storyPreview ? <img src={storyPreview} alt="Story preview" /> : <div className="create-story-avatar">{username?.[0]?.toUpperCase()}</div>}
-                {storyPreview && <button className="clear-story-preview" onClick={() => setStoryFile(null)}><FaTimes /></button>}
+                <div className="create-story-avatar">{username?.[0]?.toUpperCase()}</div>
               </div>
-              <label className="create-story-plus" title="Upload photo">
+              <button className="create-story-plus" title="Create story" onClick={() => setIsStoryCreatorOpen(true)}>
                 <FaPlus />
-                <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
-              </label>
+              </button>
               <div className="create-story-controls">
                 <strong>Create story</strong>
-                <div className="story-type-toggle">
-                  <button className={storyType === "story" ? "active" : ""} onClick={() => setStoryType("story")}>Story</button>
-                  <button className={storyType === "reel" ? "active" : ""} onClick={() => setStoryType("reel")}>Reel</button>
-                </div>
-                <input
-                  value={storyContent}
-                  onChange={(e) => setStoryContent(e.target.value)}
-                  placeholder={storyType === "story" ? "Lasts 24 hours" : "Stays on feed"}
-                />
-                <label className="story-song-toggle">
-                  <input
-                    type="checkbox"
-                    checked={storyAttachSong}
-                    onChange={(e) => setStoryAttachSong(e.target.checked)}
-                  />
-                  Song
-                </label>
-                <button className="create-story-share" onClick={createStory}>Share</button>
               </div>
             </article>
             {stories.map((story) => (
@@ -567,6 +594,7 @@ const SocialFeed = () => {
         </section>
 
         <section className="composer">
+          <div className="composer-title">What are you thinking today?</div>
           <div className="composer-prompt-row">
             <div className="post-avatar">{username?.[0]?.toUpperCase()}</div>
             <textarea
@@ -655,17 +683,9 @@ const SocialFeed = () => {
                 <button>
                   <FaComment /> Comment {post.comment_count}
                 </button>
-                <button onClick={() => sharePost(post.id)}>
+                <button onClick={() => openShareDialog(post)}>
                   <FaRetweet /> Share {post.share_count}
                 </button>
-              </div>
-
-              <div className="share-row">
-                <input
-                  value={shareText[post.id] || ""}
-                  onChange={(e) => setShareText((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                  placeholder="Add a note before sharing"
-                />
               </div>
 
               <div className="comments">
@@ -840,6 +860,112 @@ const SocialFeed = () => {
               placeholder="Message"
             />
             <button onClick={sendMessage}><FaPaperPlane /></button>
+          </div>
+        </section>
+      )}
+      {isStoryCreatorOpen && (
+        <section
+          className="story-creator-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeStoryCreator();
+          }}
+        >
+          <div className="story-creator-modal" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="story-creator-header">
+              <div>
+                <span>Create</span>
+                <h2>{storyType === "reel" ? "Reel" : "Story"}</h2>
+              </div>
+              <button onClick={closeStoryCreator}><FaTimes /></button>
+            </header>
+
+            {storyCreatorStep === "type" ? (
+              <div className="story-type-screen">
+                <button
+                  className={`story-choice-card ${storyType === "story" ? "active" : ""}`}
+                  onClick={() => setStoryType("story")}
+                >
+                  <FaCamera />
+                  <strong>Story</strong>
+                  <span>Lasts 24 hours</span>
+                </button>
+                <button
+                  className={`story-choice-card ${storyType === "reel" ? "active" : ""}`}
+                  onClick={() => setStoryType("reel")}
+                >
+                  <FaMusic />
+                  <strong>Reel</strong>
+                  <span>Stays visible</span>
+                </button>
+                <button className="story-next-button" onClick={() => setStoryCreatorStep("edit")}>
+                  Next
+                </button>
+              </div>
+            ) : (
+              <div className="story-edit-screen">
+                <div className="story-edit-preview">
+                  {storyPreview ? <img src={storyPreview} alt="Story preview" /> : <div className="story-edit-empty">{username?.[0]?.toUpperCase()}</div>}
+                  {storyPreview && <button className="clear-story-preview" onClick={() => setStoryFile(null)}><FaTimes /></button>}
+                </div>
+                <div className="story-edit-tools">
+                  <label className="story-upload-large">
+                    <FaCamera />
+                    Photo
+                    <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
+                  </label>
+                  <textarea
+                    value={storyContent}
+                    onChange={(event) => setStoryContent(event.target.value)}
+                    placeholder={storyType === "story" ? "Say something for 24 hours" : "Caption your reel"}
+                  />
+                  <label className="story-song-toggle">
+                    <input
+                      type="checkbox"
+                      checked={storyAttachSong}
+                      onChange={(event) => setStoryAttachSong(event.target.checked)}
+                    />
+                    Add current song
+                  </label>
+                  {storyAttachSong && currentTrack && renderStaticTrack(currentTrack)}
+                  <div className="story-modal-actions">
+                    <button className="quiet-action" onClick={() => setStoryCreatorStep("type")}>Back</button>
+                    <button className="create-story-share" onClick={createStory}>Share</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+      {shareDialogPost && (
+        <section
+          className="share-dialog-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeShareDialog();
+          }}
+        >
+          <div className="share-dialog" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="share-dialog-header">
+              <h2>Share post</h2>
+              <button onClick={closeShareDialog}><FaTimes /></button>
+            </header>
+            <textarea
+              value={shareDraft}
+              onChange={(event) => setShareDraft(event.target.value)}
+              placeholder="Write something about this post"
+            />
+            <div className="share-dialog-preview">
+              <div className="post-author">
+                <div className="post-avatar">{shareDialogPost.author.username?.[0]?.toUpperCase()}</div>
+                <div>
+                  <strong>{shareDialogPost.author.username}</strong>
+                  <span>{new Date(shareDialogPost.created_at).toLocaleString()}</span>
+                </div>
+              </div>
+              <p>{shareDialogPost.content}</p>
+              {shareDialogPost.track && renderStaticTrack(shareDialogPost.track)}
+            </div>
+            <button className="share-dialog-submit" onClick={sharePost}>Share</button>
           </div>
         </section>
       )}

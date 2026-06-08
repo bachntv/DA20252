@@ -38,10 +38,11 @@ function App() {
             <Route path="artist/:artistId" element={<ArtistPage />} />
             <Route path="chart/:chartId" element={<ChartPage />} />
             <Route path="search" element={<SearchPage />} />
-            <Route path="social" element={<SocialFeed />} />
             <Route path="purchased" element={<ProtectedRoute><PurchasedSongs /></ProtectedRoute>} />
             <Route path="artist-studio" element={<ProtectedRoute><ArtistStudio /></ProtectedRoute>} />
           </Route>
+
+          <Route path="/social" element={<SocialFeed />} />
 
           {/* ✅ Full-page route for /database, still protected */}
           <Route
