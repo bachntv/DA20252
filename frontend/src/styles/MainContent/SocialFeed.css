@@ -1,14 +1,30 @@
+.social-route-shell {
+  background: var(--bg-primary);
+  min-height: 100vh;
+  overflow: hidden;
+  padding-bottom: 90px;
+  position: relative;
+}
+
 .social-page {
   background: var(--bg-primary);
   color: var(--text-primary);
   display: grid;
   gap: 18px;
   grid-template-columns: 240px minmax(420px, 1fr) 320px;
-  height: 100vh;
-  min-height: 100vh;
+  height: calc(100vh - 90px);
+  min-height: calc(100vh - 90px);
   overflow-y: auto;
   padding: 18px;
   width: 100vw;
+}
+
+.social-player-bar {
+  bottom: 0;
+  left: 0;
+  position: fixed;
+  right: 0;
+  z-index: 3100;
 }
 
 .social-focus-backdrop {
@@ -66,13 +82,13 @@
   margin: 4px 0 8px;
 }
 
-.social-rail-title .focus-feed-button {
+.social-rail-title .return-feed-button {
   align-items: center;
   display: flex;
-  height: 40px;
+  height: 34px;
   justify-content: center;
   padding: 0;
-  width: 40px;
+  width: 34px;
 }
 
 .rail-item,
@@ -168,7 +184,7 @@
 }
 
 .scope-toggle button,
-.focus-feed-button,
+.return-feed-button,
 .composer-actions button,
 .comment-input button,
 .person-row button,
@@ -187,7 +203,7 @@
 }
 
 .scope-toggle button.active,
-.focus-feed-button,
+.return-feed-button,
 .composer-actions button,
 .chat-input button {
   background: var(--accent-primary);
@@ -195,7 +211,7 @@
 }
 
 .scope-toggle button:hover,
-.focus-feed-button:hover,
+.return-feed-button:hover,
 .composer-actions button:hover:not(:disabled),
 .comment-input button:hover,
 .person-row button:hover,
@@ -245,7 +261,8 @@
 .create-story-controls input,
 .comment-input input,
 .people-search,
-.chat-input input {
+.chat-input input,
+.story-song-picker input {
   background: var(--bg-input);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-full);
@@ -253,16 +270,6 @@
   margin: 0;
   padding: 10px 12px;
   width: 100%;
-}
-
-.story-song-toggle {
-  align-items: center;
-  color: var(--text-secondary);
-  display: flex;
-  font-size: 13px;
-  font-weight: 800;
-  gap: 6px;
-  white-space: nowrap;
 }
 
 .composer-photo-preview {
@@ -892,7 +899,7 @@
   backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
-  bottom: 0;
+  bottom: 90px;
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
@@ -900,7 +907,7 @@
   position: fixed;
   right: 28px;
   width: min(360px, calc(100vw - 32px));
-  z-index: 1001;
+  z-index: 3150;
 }
 
 .chat-header {
@@ -1152,6 +1159,89 @@
   resize: vertical;
 }
 
+.story-song-picker {
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.story-song-picker-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.story-song-picker-header strong {
+  font-size: 14px;
+}
+
+.story-song-picker-header button {
+  background: transparent;
+  border: 0;
+  color: var(--accent-primary-hover);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.story-song-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.story-song-options > p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+.story-song-option {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 6px;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.story-song-option .social-track {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.story-song-option.selected,
+.story-song-option:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(168, 230, 207, 0.22);
+}
+
+.current-song-badge {
+  background: var(--accent-primary);
+  border-radius: var(--radius-full);
+  color: var(--text-on-accent);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
 .story-modal-actions {
   display: flex;
   gap: 10px;
@@ -1302,7 +1392,7 @@
   }
 
   .chat-dock {
-    bottom: 0;
+    bottom: 90px;
     right: 8px;
   }
 }

@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FaCamera,
   FaCheck,
+  FaChevronDown,
   FaComment,
   FaEdit,
-  FaExpand,
   FaHeart,
   FaMusic,
   FaPaperPlane,
@@ -21,6 +21,8 @@ import {
 } from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
+import { useNavigate } from "react-router-dom";
+import MusicPlayer from "../MusicPlayer";
 import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
 import "../../styles/MainContent/SocialFeed.css";
 
@@ -37,8 +39,19 @@ const getStoredUser = () => {
 const SocialFeed = () => {
   const user = getStoredUser();
   const username = user?.username || "You";
-  const { currentSong, playSong } = usePlayer();
-  const [isFocusMode, setIsFocusMode] = useState(false);
+  const navigate = useNavigate();
+  const {
+    currentSong,
+    isPlaying,
+    playSong,
+    stop,
+    nextSong,
+    prevSong,
+    isShuffleEnabled,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode,
+  } = usePlayer();
   const [scope, setScope] = useState("all");
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
@@ -54,7 +67,9 @@ const SocialFeed = () => {
   const [storyFile, setStoryFile] = useState(null);
   const [storyPreview, setStoryPreview] = useState("");
   const [storyContent, setStoryContent] = useState("");
-  const [storyAttachSong, setStoryAttachSong] = useState(false);
+  const [selectedStoryTrack, setSelectedStoryTrack] = useState(null);
+  const [storySongQuery, setStorySongQuery] = useState("");
+  const [storySongResults, setStorySongResults] = useState([]);
   const [storyType, setStoryType] = useState("story");
   const [isStoryCreatorOpen, setIsStoryCreatorOpen] = useState(false);
   const [storyCreatorStep, setStoryCreatorStep] = useState("type");
@@ -68,6 +83,8 @@ const SocialFeed = () => {
   const [editingPostContent, setEditingPostContent] = useState("");
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentContent, setEditingCommentContent] = useState("");
+  const [likedTrackIds, setLikedTrackIds] = useState([]);
+  const [userPlaylists, setUserPlaylists] = useState([]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -127,6 +144,26 @@ const SocialFeed = () => {
     }
   }, [userQuery]);
 
+  const fetchLikedTracks = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/music/user/liked_track_ids`);
+      const data = await res.json();
+      setLikedTrackIds(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch liked tracks", err);
+    }
+  }, []);
+
+  const fetchUserPlaylists = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/music/user_playlist`);
+      const data = await res.json();
+      setUserPlaylists(Array.isArray(data) ? data.filter((playlist) => playlist.name !== "Liked Songs") : []);
+    } catch (err) {
+      console.error("Failed to fetch playlists", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchFeed();
   }, [fetchFeed]);
@@ -135,7 +172,9 @@ const SocialFeed = () => {
     fetchStories();
     fetchFriends();
     fetchThreads();
-  }, [fetchStories, fetchFriends, fetchThreads]);
+    fetchLikedTracks();
+    fetchUserPlaylists();
+  }, [fetchStories, fetchFriends, fetchThreads, fetchLikedTracks, fetchUserPlaylists]);
 
   useEffect(() => {
     window.addEventListener("socialFeedUpdated", fetchFeed);
@@ -208,7 +247,7 @@ const SocialFeed = () => {
   };
 
   const createStory = async () => {
-    const trackId = storyAttachSong && currentSong?.id ? currentSong.id : null;
+    const trackId = selectedStoryTrack?.id || null;
     if (!storyContent.trim() && !storyFile && !trackId) return;
 
     try {
@@ -223,7 +262,9 @@ const SocialFeed = () => {
       });
       setStoryContent("");
       setStoryFile(null);
-      setStoryAttachSong(false);
+      setSelectedStoryTrack(null);
+      setStorySongQuery("");
+      setStorySongResults([]);
       setStoryType("story");
       setIsStoryCreatorOpen(false);
       setStoryCreatorStep("type");
@@ -250,7 +291,9 @@ const SocialFeed = () => {
     setStoryCreatorStep("type");
     setStoryContent("");
     setStoryFile(null);
-    setStoryAttachSong(false);
+    setSelectedStoryTrack(null);
+    setStorySongQuery("");
+    setStorySongResults([]);
     setStoryType("story");
   };
 
@@ -440,6 +483,32 @@ const SocialFeed = () => {
     }
   };
 
+  const handleToggleLike = async () => {
+    if (!currentSong?.id) return;
+    const isLiked = likedTrackIds.includes(currentSong.id);
+
+    try {
+      await authFetch(`${API_BASE}/api/music/user/liked_track?track_id=${currentSong.id}`, {
+        method: isLiked ? "DELETE" : "POST",
+      });
+      setLikedTrackIds((prev) => (isLiked ? prev.filter((id) => id !== currentSong.id) : [...prev, currentSong.id]));
+    } catch (err) {
+      console.error("Failed to toggle like", err);
+    }
+  };
+
+  const handleAddTrackToPlaylist = async (trackId, playlistId) => {
+    try {
+      await authFetch(`${API_BASE}/api/music/user/add_track_to_playlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ track_id: trackId, playlist_id: playlistId }),
+      });
+    } catch (err) {
+      console.error("Failed to add track to playlist", err);
+    }
+  };
+
   const playTrack = async (track) => {
     if (!track?.id && !track?.title) return;
 
@@ -514,35 +583,78 @@ const SocialFeed = () => {
     return <button onClick={() => requestFriend(user.id)}><FaUserPlus /> Add</button>;
   };
 
-  const currentTrack = currentSong
-    ? {
-        id: currentSong.id,
-        title: currentSong.track_name || currentSong.title,
-        cover_url: currentSong.cover_url || currentSong.image_url,
-        duration: currentSong.duration,
+  const currentTrack = useMemo(() => (
+    currentSong
+      ? {
+          id: currentSong.id,
+          title: currentSong.track_name || currentSong.title,
+          cover_url: currentSong.cover_url || currentSong.image_url,
+          duration: currentSong.duration,
+          artist: currentSong.artist || currentSong.artist_name,
+        }
+      : null
+  ), [currentSong]);
+
+  const normalizeTrack = (track) => {
+    if (!track) return null;
+    return {
+      ...track,
+      id: track.id || track.track_id,
+      title: track.title || track.track_name,
+      artist: track.artist || track.artist_name,
+      cover_url: track.cover_url || track.image_url,
+    };
+  };
+
+  const storySongOptions = [
+    ...(currentTrack ? [{ ...currentTrack, isCurrent: true }] : []),
+    ...storySongResults
+      .map(normalizeTrack)
+      .filter(Boolean)
+      .filter((track) => !currentTrack || String(track.id) !== String(currentTrack.id)),
+  ];
+
+  useEffect(() => {
+    if (!isStoryCreatorOpen || storyCreatorStep !== "edit") return;
+    setSelectedStoryTrack((current) => current || currentTrack);
+  }, [currentTrack, isStoryCreatorOpen, storyCreatorStep]);
+
+  useEffect(() => {
+    if (!isStoryCreatorOpen || storyCreatorStep !== "edit") return undefined;
+    const query = storySongQuery.trim();
+    if (!query) {
+      setStorySongResults([]);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/music/search?query=${encodeURIComponent(query)}&filter_by=track`);
+        const data = await res.json();
+        setStorySongResults(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to search story songs", err);
       }
-    : null;
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [isStoryCreatorOpen, storyCreatorStep, storySongQuery]);
 
   return (
-    <div
-      className={isFocusMode ? "social-focus-backdrop" : ""}
-      onMouseDown={(event) => {
-        if (isFocusMode && event.target === event.currentTarget) setIsFocusMode(false);
-      }}
-    >
+    <div className="social-route-shell">
       <div
-        className={`social-page facebook-shell ${isFocusMode ? "is-focused" : ""}`}
+        className="social-page facebook-shell"
         onMouseDown={(event) => event.stopPropagation()}
       >
       <aside className="social-left-rail">
         <div className="social-rail-title">
           <h2>Social</h2>
           <button
-            className="focus-feed-button"
-            onClick={() => setIsFocusMode((current) => !current)}
-            title={isFocusMode ? "Close focus view" : "Focus feed"}
+            className="return-feed-button"
+            onClick={() => navigate("/")}
+            title="Return to main screen"
           >
-            {isFocusMode ? <FaTimes /> : <FaExpand />}
+            <FaChevronDown />
           </button>
         </div>
         <button className="rail-item active"><FaUserFriends /> Feed</button>
@@ -918,15 +1030,38 @@ const SocialFeed = () => {
                     onChange={(event) => setStoryContent(event.target.value)}
                     placeholder={storyType === "story" ? "Say something for 24 hours" : "Caption your reel"}
                   />
-                  <label className="story-song-toggle">
+                  <div className="story-song-picker">
+                    <div className="story-song-picker-header">
+                      <strong>Choose song</strong>
+                      {selectedStoryTrack && (
+                        <button onClick={() => setSelectedStoryTrack(null)} type="button">
+                          Remove
+                        </button>
+                      )}
+                    </div>
                     <input
-                      type="checkbox"
-                      checked={storyAttachSong}
-                      onChange={(event) => setStoryAttachSong(event.target.checked)}
+                      value={storySongQuery}
+                      onChange={(event) => setStorySongQuery(event.target.value)}
+                      placeholder="Search songs"
                     />
-                    Add current song
-                  </label>
-                  {storyAttachSong && currentTrack && renderStaticTrack(currentTrack)}
+                    <div className="story-song-options">
+                      {storySongOptions.length === 0 ? (
+                        <p>No song selected.</p>
+                      ) : (
+                        storySongOptions.slice(0, 8).map((track) => (
+                          <button
+                            className={`story-song-option ${selectedStoryTrack?.id === track.id ? "selected" : ""}`}
+                            key={`${track.isCurrent ? "current" : "search"}-${track.id}`}
+                            onClick={() => setSelectedStoryTrack(track)}
+                            type="button"
+                          >
+                            {renderStaticTrack(track)}
+                            {track.isCurrent && <span className="current-song-badge">Current song</span>}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
                   <div className="story-modal-actions">
                     <button className="quiet-action" onClick={() => setStoryCreatorStep("type")}>Back</button>
                     <button className="create-story-share" onClick={createStory}>Share</button>
@@ -969,6 +1104,32 @@ const SocialFeed = () => {
           </div>
         </section>
       )}
+      </div>
+      <div className="social-player-bar">
+        <MusicPlayer
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          onPlayPause={() => {
+            if (!currentSong) return;
+            if (isPlaying) stop();
+            else playSong(currentSong);
+          }}
+          onNext={nextSong}
+          onPrev={prevSong}
+          likedTrackIds={likedTrackIds}
+          userPlaylists={userPlaylists}
+          onToggleLike={handleToggleLike}
+          onAddTrackToPlaylist={handleAddTrackToPlaylist}
+          onToggleFullscreen={() => {}}
+          onToggleQueue={() => {}}
+          isQueueVisible={false}
+          onToggleLyrics={() => {}}
+          isLyricsVisible={false}
+          isShuffleEnabled={isShuffleEnabled}
+          repeatMode={repeatMode}
+          onToggleShuffle={toggleShuffle}
+          onCycleRepeat={cycleRepeatMode}
+        />
       </div>
     </div>
   );
