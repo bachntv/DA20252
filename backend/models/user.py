@@ -16,5 +16,6 @@ class User(Base):
     gender = Column(String, nullable=True)
     roles = Column(String, nullable=False, default="user")
     account_type = Column(String, nullable=False, default="free")
+    profile_picture_url = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     is_muted = Column(Boolean, nullable=False, default=False)

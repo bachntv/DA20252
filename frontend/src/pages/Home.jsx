@@ -17,7 +17,8 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 const Home = () => {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user"));
+  const [storedUser, setStoredUser] = useState(() => JSON.parse(localStorage.getItem("user") || "{}"));
+  const user = storedUser;
   const userId = token ? jwtDecode(token)?.sub : null;
   const username = user?.username || "Guest";
 
@@ -157,11 +158,16 @@ const Home = () => {
     const syncSocialMinimized = () => {
       setIsSocialMinimized(localStorage.getItem("socialFeedMinimized") === "true");
     };
+    const syncProfile = () => setStoredUser(JSON.parse(localStorage.getItem("user") || "{}"));
     window.addEventListener("socialFeedMinimized", syncSocialMinimized);
+    window.addEventListener("profileUpdated", syncProfile);
     window.addEventListener("storage", syncSocialMinimized);
+    window.addEventListener("storage", syncProfile);
     return () => {
       window.removeEventListener("socialFeedMinimized", syncSocialMinimized);
+      window.removeEventListener("profileUpdated", syncProfile);
       window.removeEventListener("storage", syncSocialMinimized);
+      window.removeEventListener("storage", syncProfile);
     };
   }, []);
 
@@ -179,7 +185,7 @@ const Home = () => {
 
   return (
     <div className="home">
-      <Navbar username={username} />
+      <Navbar username={username} profilePicture={user?.profile_picture_url} userId={user?.id} />
 
       <div className="home-content">
         <SidebarLeft />

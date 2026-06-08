@@ -683,6 +683,18 @@ const SocialFeed = () => {
     setActiveStoryIndex(index);
   };
 
+  const renderUserAvatar = (profileUser, className = "post-avatar") => {
+    if (profileUser?.profile_picture_url) {
+      return <img className={`${className} avatar-image`} src={profileUser.profile_picture_url} alt={profileUser.username} />;
+    }
+    return <div className={className}>{profileUser?.username?.[0]?.toUpperCase() || "U"}</div>;
+  };
+
+  const openUserProfile = (profileUser, event) => {
+    event?.stopPropagation();
+    if (profileUser?.id) navigate(`/profile/${profileUser.id}`);
+  };
+
   useEffect(() => {
     if (!activeStory || activeStoryMediaType === "video") return undefined;
     if (activeStory.track) playTrack(activeStory.track);
@@ -744,7 +756,7 @@ const SocialFeed = () => {
           <div className="story-tray">
             <article className="story-tile create-story-tile">
               <div className="create-story-media">
-                <div className="create-story-avatar">{username?.[0]?.toUpperCase()}</div>
+                {renderUserAvatar(user, "create-story-avatar")}
               </div>
               <button className="create-story-plus" title="Create story" onClick={() => setIsStoryCreatorOpen(true)}>
                 <FaPlus />
@@ -763,7 +775,9 @@ const SocialFeed = () => {
                   <div className="story-gradient" />
                 )}
                 <div className="story-type-badge">{story.story_type === "reel" ? "Reel" : "Story"}</div>
-                <div className="story-owner-avatar">{story.author.username?.[0]?.toUpperCase()}</div>
+                <span onClick={(event) => openUserProfile(story.author, event)}>
+                  {renderUserAvatar(story.author, "story-owner-avatar")}
+                </span>
                 <div className="story-overlay">
                   <strong>{story.author.username}</strong>
                   <span>{story.content || story.track?.title || "Shared a story"}</span>
@@ -776,7 +790,7 @@ const SocialFeed = () => {
         <section className="composer">
           <div className="composer-title">What are you thinking today?</div>
           <div className="composer-prompt-row">
-            <div className="post-avatar">{username?.[0]?.toUpperCase()}</div>
+            {renderUserAvatar(user, "post-avatar")}
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -825,9 +839,11 @@ const SocialFeed = () => {
             <article className="post-card" key={post.id}>
               <div className="post-header">
                 <div className="post-author">
-                  <div className="post-avatar">{post.author.username?.[0]?.toUpperCase()}</div>
+                  <button className="avatar-link" onClick={(event) => openUserProfile(post.author, event)} type="button">
+                    {renderUserAvatar(post.author, "post-avatar")}
+                  </button>
                   <div>
-                    <strong>{post.author.username}</strong>
+                      <strong className="profile-name-link" onClick={(event) => openUserProfile(post.author, event)}>{post.author.username}</strong>
                     <span>{new Date(post.created_at).toLocaleString()}</span>
                   </div>
                 </div>
@@ -880,7 +896,7 @@ const SocialFeed = () => {
                 {post.comments.map((comment) => (
                   <div className="comment" key={comment.id}>
                     <div className="comment-body">
-                      <strong>{comment.author.username}</strong>
+                      <strong className="profile-name-link" onClick={(event) => openUserProfile(comment.author, event)}>{comment.author.username}</strong>
                       {editingCommentId === comment.id ? (
                         <input
                           value={editingCommentContent}
@@ -939,8 +955,8 @@ const SocialFeed = () => {
           ) : (
             friends.incoming_requests.map((request) => (
               <div className="person-row" key={request.id}>
-                <div className="post-avatar">{request.user.username?.[0]?.toUpperCase()}</div>
-                <span>{request.user.username}</span>
+                {renderUserAvatar(request.user, "post-avatar")}
+                <span className="profile-name-link" onClick={(event) => openUserProfile(request.user, event)}>{request.user.username}</span>
                 <button onClick={() => acceptFriend(request.id)}><FaCheck /></button>
                 <button className="quiet-action" onClick={() => removeFriendRequest(request.id)}><FaTimes /></button>
               </div>
@@ -964,8 +980,8 @@ const SocialFeed = () => {
               arr.findIndex((item) => item.id === user.id) === index
             )).slice(0, 8).map((user) => (
               <div className="user-row" key={user.id}>
-                <div className="post-avatar">{user.username?.[0]?.toUpperCase()}</div>
-                <span>{user.username}</span>
+                {renderUserAvatar(user, "post-avatar")}
+                <span className="profile-name-link" onClick={(event) => openUserProfile(user, event)}>{user.username}</span>
                 {user.friendship ? renderFriendButton(user) : <button onClick={() => requestFriend(user.id)}><FaUserPlus /> Add</button>}
                 <button className="quiet-action" onClick={() => toggleFollow(user)}>
                   {user.is_following ? <FaUserCheck /> : <FaUserPlus />}
@@ -986,7 +1002,7 @@ const SocialFeed = () => {
             ) : (
               friends.friends.map((friend) => (
                 <button className="contact-row" key={friend.id} onClick={() => openChat(friend)}>
-                  <div className="post-avatar">{friend.username?.[0]?.toUpperCase()}</div>
+                  {renderUserAvatar(friend, "post-avatar")}
                   <span>{friend.username}</span>
                 </button>
               ))
@@ -1005,7 +1021,7 @@ const SocialFeed = () => {
             ) : (
               threads.map((thread) => (
                 <button className="thread-row" key={thread.user.id} onClick={() => openChat(thread.user)}>
-                  <div className="post-avatar">{thread.user.username?.[0]?.toUpperCase()}</div>
+                  {renderUserAvatar(thread.user, "post-avatar")}
                   <div>
                     <strong>{thread.user.username}</strong>
                     <span>{thread.latest_message.content}</span>
@@ -1074,7 +1090,7 @@ const SocialFeed = () => {
             </div>
             <header className="story-viewer-header">
               <div className="post-author">
-                <div className="post-avatar">{activeStory.author.username?.[0]?.toUpperCase()}</div>
+                {renderUserAvatar(activeStory.author, "post-avatar")}
                 <div>
                   <strong>{activeStory.author.username}</strong>
                   <span>{activeStory.story_type === "reel" ? "Reel" : "Story"}</span>
@@ -1242,7 +1258,7 @@ const SocialFeed = () => {
             />
             <div className="share-dialog-preview">
               <div className="post-author">
-                <div className="post-avatar">{shareDialogPost.author.username?.[0]?.toUpperCase()}</div>
+                {renderUserAvatar(shareDialogPost.author, "post-avatar")}
                 <div>
                   <strong>{shareDialogPost.author.username}</strong>
                   <span>{new Date(shareDialogPost.created_at).toLocaleString()}</span>

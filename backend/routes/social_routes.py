@@ -71,8 +71,8 @@ class LyricsUpdate(BaseModel):
 
 def user_public(user: User | None):
     if not user:
-        return {"id": None, "username": "Unknown user"}
-    return {"id": user.id, "username": user.username}
+        return {"id": None, "username": "Unknown user", "profile_picture_url": None}
+    return {"id": user.id, "username": user.username, "profile_picture_url": user.profile_picture_url}
 
 
 def user_summary(db: Session, user_id: str | None):
@@ -804,6 +804,7 @@ def search_users(q: str = "", db: Session = Depends(get_db), current_user: User 
         {
             "id": user.id,
             "username": user.username,
+            "profile_picture_url": user.profile_picture_url,
             "is_following": user.id in following,
             "friendship": friendship_state(db, current_user.id, user.id),
         }

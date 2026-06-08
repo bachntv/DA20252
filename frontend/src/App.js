@@ -20,6 +20,7 @@ import AdminSongs from "./pages/AdminSongs";
 import AdminModeration from "./pages/AdminModeration";
 import SettingsPage from "./pages/Settings";
 import PremiumPage from "./pages/Premium";
+import UserProfile from "./pages/UserProfile";
 
 function App() {
   return (
@@ -61,6 +62,10 @@ function App() {
           <Route
             path="/setting"
             element={<ProtectedRoute><SettingsPage /></ProtectedRoute>}
+          />
+          <Route
+            path="/profile/:userId"
+            element={<ProtectedRoute><UserProfile /></ProtectedRoute>}
           />
 
           <Route path="/premium" element={<PremiumPage />} />

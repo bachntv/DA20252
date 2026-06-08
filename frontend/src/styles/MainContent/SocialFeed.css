@@ -622,6 +622,27 @@
   width: 38px;
 }
 
+.avatar-image {
+  background: rgba(15, 23, 42, 0.12);
+  object-fit: cover;
+}
+
+.avatar-link {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-name-link {
+  cursor: pointer;
+}
+
+.profile-name-link:hover {
+  color: var(--accent-primary-hover);
+}
+
 .post-header span {
   color: var(--text-secondary);
   display: block;

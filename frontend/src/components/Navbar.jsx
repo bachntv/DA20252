@@ -7,7 +7,7 @@ import { authFetch } from "../utils/authFetch";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
-const Navbar = ({ username, profilePicture }) => {
+const Navbar = ({ username, profilePicture, userId }) => {
   const location = useLocation();
   const token = localStorage.getItem("token");
   const isAuthenticated = Boolean(token);
@@ -268,6 +268,7 @@ const Navbar = ({ username, profilePicture }) => {
             {isAuthenticated ? (
               <>
                 <div className="account-name">{username}</div>
+                {userId && <button className="button" onClick={() => navigate(`/profile/${userId}`)}>Profile</button>}
                 <button className="button" onClick={() => navigate("/setting")}>Setting</button>
                 {roles.includes("artist") && (
                   <button className="button" onClick={() => navigate("/artist-studio")}>

@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 from typing import Optional
 from jose import jwt, JWTError
@@ -27,6 +30,9 @@ from utils.billing import (
 )
 
 router = APIRouter()
+PROFILE_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads", "profiles"))
+ALLOWED_PROFILE_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 
 def get_db():
     db = SessionLocal()
@@ -39,6 +45,24 @@ def get_db():
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+
+async def save_profile_picture(image: UploadFile, request: Request):
+    extension = ALLOWED_PROFILE_IMAGE_TYPES.get(image.content_type)
+    if not image or not image.filename or not extension:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WebP, or GIF profile pictures are supported")
+
+    contents = await image.read()
+    if len(contents) > MAX_PROFILE_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Profile picture must be 5 MB or smaller")
+
+    os.makedirs(PROFILE_UPLOAD_DIR, exist_ok=True)
+    file_name = f"{uuid4().hex}{extension}"
+    file_path = os.path.join(PROFILE_UPLOAD_DIR, file_name)
+    with open(file_path, "wb") as file:
+        file.write(contents)
+
+    return str(request.base_url).rstrip("/") + f"/uploads/profiles/{file_name}"
 
 # Get current user profile
 @router.get("/me", response_model=UserUpdate)
@@ -53,6 +77,7 @@ def get_my_profile(db: Session = Depends(get_db), current_user: User = Depends(g
         "birthdate": current_user.birthdate,
         "gender": current_user.gender,
         "account_type": current_user.account_type,
+        "profile_picture_url": current_user.profile_picture_url,
     }
 
 # Update current user profile
@@ -71,6 +96,89 @@ def update_my_profile(update: UserUpdate, db: Session = Depends(get_db), current
     db.refresh(user)
     log_activity(db, user.id, "update_profile", "user", user.id, "Updated account profile")
     return {"message": "Profile updated successfully"}
+
+
+@router.post("/me/profile-picture")
+async def update_profile_picture(
+    request: Request,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    image_url = await save_profile_picture(image, request)
+    user.profile_picture_url = image_url
+    db.commit()
+    db.refresh(user)
+    log_activity(db, user.id, "update_profile_picture", "user", user.id, "Updated profile picture")
+    return {
+        "message": "Profile picture updated",
+        "profile_picture_url": user.profile_picture_url,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "roles": user.roles,
+            "account_type": user.account_type,
+            "profile_picture_url": user.profile_picture_url,
+        },
+    }
+
+
+@router.get("/profile/{user_id}")
+def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from models.social import SocialFollow, SocialFriendship, SocialPost
+
+    post_count = db.query(SocialPost).filter(SocialPost.user_id == user.id).count()
+    follower_count = db.query(SocialFollow).filter(SocialFollow.following_id == user.id).count()
+    following_count = db.query(SocialFollow).filter(SocialFollow.follower_id == user.id).count()
+    friend_count = db.query(SocialFriendship).filter(SocialFriendship.user_id == user.id).count()
+    is_following = db.query(SocialFollow).filter(
+        SocialFollow.follower_id == current_user.id,
+        SocialFollow.following_id == user.id,
+    ).first() is not None
+
+    recent_posts = (
+        db.query(SocialPost)
+        .filter(SocialPost.user_id == user.id)
+        .order_by(SocialPost.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "roles": user.roles,
+        "account_type": user.account_type,
+        "profile_picture_url": user.profile_picture_url,
+        "is_self": user.id == current_user.id,
+        "is_following": is_following,
+        "stats": {
+            "posts": post_count,
+            "followers": follower_count,
+            "following": following_count,
+            "friends": friend_count,
+        },
+        "recent_posts": [
+            {
+                "id": post.id,
+                "content": post.content,
+                "created_at": post.created_at.isoformat(),
+                "image_url": post.image_url,
+                "media_url": post.media_url or post.image_url,
+                "media_type": post.media_type or ("image" if post.image_url else None),
+            }
+            for post in recent_posts
+        ],
+    }
 
 # Change password
 @router.put("/me/password")

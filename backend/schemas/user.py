@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     birthdate: date
     gender: Optional[str]
     account_type: Optional[str] = "free"
+    profile_picture_url: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -31,3 +32,4 @@ class UserUpdate(BaseModel):
     birthdate: Optional[date]
     gender: Optional[str]
     account_type: Optional[str] = None
+    profile_picture_url: Optional[str] = None
