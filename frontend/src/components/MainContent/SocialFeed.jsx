@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FaCamera,
   FaCheck,
-  FaChevronDown,
   FaChevronLeft,
   FaChevronRight,
   FaComment,
@@ -719,17 +718,6 @@ const SocialFeed = () => {
       <aside className="social-left-rail">
         <div className="social-rail-title">
           <h2>Social</h2>
-          <button
-            className="return-feed-button"
-            onClick={() => {
-              localStorage.setItem("socialFeedMinimized", "true");
-              window.dispatchEvent(new Event("socialFeedMinimized"));
-              navigate("/");
-            }}
-            title="Return to main screen"
-          >
-            <FaChevronDown />
-          </button>
         </div>
         <button className="rail-item active"><FaUserFriends /> Feed</button>
         <button className="rail-item"><FaComment /> Messages</button>
@@ -1003,7 +991,7 @@ const SocialFeed = () => {
 
         <section className="side-panel">
           <div className="panel-title">
-            <h3>Contacts</h3>
+            <h3>Friends</h3>
             <FaComment />
           </div>
           <div className="user-list">

@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
 import SidebarLeft from "../components/SidebarLeft";
 import RightContent from "../components/RightContent";
 import MusicPlayer from "../components/MusicPlayer";
 import NowPlayingFocus from "../components/MainContent/NowPlayingFocus";
 import { usePlayer } from "../context/PlayerContext";
-import { FaTimes, FaUsers } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
 import "../styles/MainContent/Home.css";
 import { authFetch } from '../utils/authFetch';
@@ -17,16 +15,12 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 const Home = () => {
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
-  const [storedUser, setStoredUser] = useState(() => JSON.parse(localStorage.getItem("user") || "{}"));
-  const user = storedUser;
   const userId = token ? jwtDecode(token)?.sub : null;
-  const username = user?.username || "Guest";
 
   const [likedTrackIds, setLikedTrackIds] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const [isQueueVisible, setIsQueueVisible] = useState(false);
   const [focusView, setFocusView] = useState(null);
-  const [isSocialMinimized, setIsSocialMinimized] = useState(() => localStorage.getItem("socialFeedMinimized") === "true");
   const {
     currentSong,
     isPlaying,
@@ -154,39 +148,8 @@ const Home = () => {
     recordListening();
   }, [currentSong, token, lastTrackedSongId]);
 
-  useEffect(() => {
-    const syncSocialMinimized = () => {
-      setIsSocialMinimized(localStorage.getItem("socialFeedMinimized") === "true");
-    };
-    const syncProfile = () => setStoredUser(JSON.parse(localStorage.getItem("user") || "{}"));
-    window.addEventListener("socialFeedMinimized", syncSocialMinimized);
-    window.addEventListener("profileUpdated", syncProfile);
-    window.addEventListener("storage", syncSocialMinimized);
-    window.addEventListener("storage", syncProfile);
-    return () => {
-      window.removeEventListener("socialFeedMinimized", syncSocialMinimized);
-      window.removeEventListener("profileUpdated", syncProfile);
-      window.removeEventListener("storage", syncSocialMinimized);
-      window.removeEventListener("storage", syncProfile);
-    };
-  }, []);
-
-  const reopenSocialFeed = () => {
-    localStorage.removeItem("socialFeedMinimized");
-    setIsSocialMinimized(false);
-    navigate("/social");
-  };
-
-  const dismissSocialMinimized = (event) => {
-    event.stopPropagation();
-    localStorage.removeItem("socialFeedMinimized");
-    setIsSocialMinimized(false);
-  };
-
   return (
     <div className="home">
-      <Navbar username={username} profilePicture={user?.profile_picture_url} userId={user?.id} />
-
       <div className="home-content">
         <SidebarLeft />
         <div className="main-outlet">
@@ -235,16 +198,6 @@ const Home = () => {
         onToggleShuffle={toggleShuffle}
         onCycleRepeat={cycleRepeatMode}
       />
-      {isSocialMinimized && (
-        <div className="social-minimized-pill" onClick={reopenSocialFeed} role="button" tabIndex={0} title="Open social feed">
-          <FaUsers />
-          <span>Social</span>
-          <b>minimized</b>
-          <button onClick={dismissSocialMinimized} title="Dismiss social feed">
-            <FaTimes />
-          </button>
-        </div>
-      )}
     </div>
   );
 };

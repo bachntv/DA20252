@@ -1,6 +1,7 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { PlayerProvider } from "./context/PlayerContext";
+import Navbar from "./components/Navbar";
 
 import Signin from "./pages/Signin";
 import Signup from "./pages/Signup";
@@ -22,10 +23,48 @@ import SettingsPage from "./pages/Settings";
 import PremiumPage from "./pages/Premium";
 import UserProfile from "./pages/UserProfile";
 
+const AppChrome = () => {
+  const location = useLocation();
+  const [storedUser, setStoredUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch (err) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    const syncProfile = () => {
+      try {
+        setStoredUser(JSON.parse(localStorage.getItem("user") || "{}"));
+      } catch (err) {
+        setStoredUser({});
+      }
+    };
+    window.addEventListener("profileUpdated", syncProfile);
+    window.addEventListener("storage", syncProfile);
+    return () => {
+      window.removeEventListener("profileUpdated", syncProfile);
+      window.removeEventListener("storage", syncProfile);
+    };
+  }, []);
+
+  if (["/signin", "/signup"].includes(location.pathname)) return null;
+
+  return (
+    <Navbar
+      username={storedUser?.username || "Guest"}
+      profilePicture={storedUser?.profile_picture_url}
+      userId={storedUser?.id}
+    />
+  );
+};
+
 function App() {
   return (
     <PlayerProvider>
       <Router>
+        <AppChrome />
         <Routes>
           {/* Public */}
           <Route path="/signin" element={<Signin />} />
