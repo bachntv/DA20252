@@ -102,6 +102,8 @@ class SocialStory(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     content = Column(Text, nullable=False, default="")
     image_url = Column(String, nullable=True)
+    media_url = Column(String, nullable=True)
+    media_type = Column(String, nullable=False, default="image")
     track_id = Column(String, nullable=True, index=True)
     story_type = Column(String, nullable=False, default="story", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

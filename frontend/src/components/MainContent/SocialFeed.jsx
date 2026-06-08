@@ -3,6 +3,8 @@ import {
   FaCamera,
   FaCheck,
   FaChevronDown,
+  FaChevronLeft,
+  FaChevronRight,
   FaComment,
   FaEdit,
   FaHeart,
@@ -66,6 +68,7 @@ const SocialFeed = () => {
   const [photoPreview, setPhotoPreview] = useState("");
   const [storyFile, setStoryFile] = useState(null);
   const [storyPreview, setStoryPreview] = useState("");
+  const [storyMediaType, setStoryMediaType] = useState("");
   const [storyContent, setStoryContent] = useState("");
   const [selectedStoryTrack, setSelectedStoryTrack] = useState(null);
   const [storySongQuery, setStorySongQuery] = useState("");
@@ -76,6 +79,8 @@ const SocialFeed = () => {
   const [comments, setComments] = useState({});
   const [shareDialogPost, setShareDialogPost] = useState(null);
   const [shareDraft, setShareDraft] = useState("");
+  const [activeStoryIndex, setActiveStoryIndex] = useState(null);
+  const [storyProgress, setStoryProgress] = useState(0);
   const [users, setUsers] = useState([]);
   const [userQuery, setUserQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -200,11 +205,13 @@ const SocialFeed = () => {
   useEffect(() => {
     if (!storyFile) {
       setStoryPreview("");
+      setStoryMediaType("");
       return undefined;
     }
 
     const previewUrl = URL.createObjectURL(storyFile);
     setStoryPreview(previewUrl);
+    setStoryMediaType(storyFile.type.startsWith("video/") ? "video" : "image");
     return () => URL.revokeObjectURL(previewUrl);
   }, [storyFile]);
 
@@ -255,13 +262,14 @@ const SocialFeed = () => {
       formData.append("content", storyContent);
       formData.append("story_type", storyType);
       if (trackId) formData.append("track_id", trackId);
-      if (storyFile) formData.append("image", storyFile);
+      if (storyFile) formData.append("media", storyFile);
       await authFetch(`${API_BASE}/api/social/stories/photo`, {
         method: "POST",
         body: formData,
       });
       setStoryContent("");
       setStoryFile(null);
+      setStoryMediaType("");
       setSelectedStoryTrack(null);
       setStorySongQuery("");
       setStorySongResults([]);
@@ -282,7 +290,7 @@ const SocialFeed = () => {
 
   const handleStoryPhotoChange = (event) => {
     const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file || (!file.type.startsWith("image/") && !file.type.startsWith("video/"))) return;
     setStoryFile(file);
   };
 
@@ -291,6 +299,7 @@ const SocialFeed = () => {
     setStoryCreatorStep("type");
     setStoryContent("");
     setStoryFile(null);
+    setStoryMediaType("");
     setSelectedStoryTrack(null);
     setStorySongQuery("");
     setStorySongResults([]);
@@ -509,7 +518,7 @@ const SocialFeed = () => {
     }
   };
 
-  const playTrack = async (track) => {
+  const playTrack = useCallback(async (track) => {
     if (!track?.id && !track?.title) return;
 
     const title = track.track_name || track.title;
@@ -527,7 +536,7 @@ const SocialFeed = () => {
     } catch (err) {
       console.error("Failed to play shared song", err);
     }
-  };
+  }, [playSong]);
 
   const renderTrack = (track) => {
     if (!track) return null;
@@ -640,6 +649,52 @@ const SocialFeed = () => {
     return () => clearTimeout(timer);
   }, [isStoryCreatorOpen, storyCreatorStep, storySongQuery]);
 
+  const activeStory = activeStoryIndex === null ? null : stories[activeStoryIndex];
+  const activeStoryMediaType = activeStory?.media_type || (activeStory?.image_url ? "image" : null);
+  const activeStoryMediaUrl = activeStory?.media_url || activeStory?.image_url;
+
+  const closeStoryViewer = () => {
+    setActiveStoryIndex(null);
+    setStoryProgress(0);
+  };
+
+  const showNextStory = useCallback(() => {
+    setStoryProgress(0);
+    setActiveStoryIndex((current) => {
+      if (current === null) return null;
+      const nextIndex = current + 1;
+      return nextIndex < stories.length ? nextIndex : null;
+    });
+  }, [stories.length]);
+
+  const showPreviousStory = () => {
+    setStoryProgress(0);
+    setActiveStoryIndex((current) => {
+      if (current === null) return null;
+      return Math.max(0, current - 1);
+    });
+  };
+
+  const openStoryViewer = (index) => {
+    setStoryProgress(0);
+    setActiveStoryIndex(index);
+  };
+
+  useEffect(() => {
+    if (!activeStory || activeStoryMediaType === "video") return undefined;
+    if (activeStory.track) playTrack(activeStory.track);
+
+    const durationMs = 8000;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const nextProgress = Math.min(100, ((Date.now() - startedAt) / durationMs) * 100);
+      setStoryProgress(nextProgress);
+      if (nextProgress >= 100) showNextStory();
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [activeStory, activeStoryMediaType, playTrack, showNextStory]);
+
   return (
     <div className="social-route-shell">
       <div
@@ -651,7 +706,11 @@ const SocialFeed = () => {
           <h2>Social</h2>
           <button
             className="return-feed-button"
-            onClick={() => navigate("/")}
+            onClick={() => {
+              localStorage.setItem("socialFeedMinimized", "true");
+              window.dispatchEvent(new Event("socialFeedMinimized"));
+              navigate("/");
+            }}
             title="Return to main screen"
           >
             <FaChevronDown />
@@ -691,16 +750,22 @@ const SocialFeed = () => {
                 <strong>Create story</strong>
               </div>
             </article>
-            {stories.map((story) => (
-              <article className="story-tile" key={story.id}>
-                {story.image_url ? <img src={story.image_url} alt="Story" /> : <div className="story-gradient" />}
+            {stories.map((story, index) => (
+              <button className="story-tile story-view-button" key={story.id} onClick={() => openStoryViewer(index)} type="button">
+                {story.media_type === "video" && story.media_url ? (
+                  <video src={story.media_url} muted playsInline />
+                ) : story.media_url || story.image_url ? (
+                  <img src={story.media_url || story.image_url} alt="Story" />
+                ) : (
+                  <div className="story-gradient" />
+                )}
                 <div className="story-type-badge">{story.story_type === "reel" ? "Reel" : "Story"}</div>
                 <div className="story-owner-avatar">{story.author.username?.[0]?.toUpperCase()}</div>
                 <div className="story-overlay">
                   <strong>{story.author.username}</strong>
                   <span>{story.content || story.track?.title || "Shared a story"}</span>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
         </section>
@@ -975,6 +1040,75 @@ const SocialFeed = () => {
           </div>
         </section>
       )}
+      {activeStory && (
+        <section className="story-viewer-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeStoryViewer();
+        }}>
+          <div className="story-viewer" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="story-viewer-progress">
+              {stories.map((story, index) => (
+                <span key={story.id}>
+                  <b
+                    style={{
+                      width:
+                        index < activeStoryIndex
+                          ? "100%"
+                          : index === activeStoryIndex
+                            ? `${storyProgress}%`
+                            : "0%",
+                    }}
+                  />
+                </span>
+              ))}
+            </div>
+            <header className="story-viewer-header">
+              <div className="post-author">
+                <div className="post-avatar">{activeStory.author.username?.[0]?.toUpperCase()}</div>
+                <div>
+                  <strong>{activeStory.author.username}</strong>
+                  <span>{activeStory.story_type === "reel" ? "Reel" : "Story"}</span>
+                </div>
+              </div>
+              <button onClick={closeStoryViewer} title="Close story"><FaTimes /></button>
+            </header>
+            <div className="story-viewer-stage">
+              {activeStoryMediaType === "video" && activeStoryMediaUrl ? (
+                <video
+                  src={activeStoryMediaUrl}
+                  autoPlay
+                  controls
+                  playsInline
+                  onTimeUpdate={(event) => {
+                    const video = event.currentTarget;
+                    if (video.duration) setStoryProgress((video.currentTime / video.duration) * 100);
+                  }}
+                  onEnded={showNextStory}
+                />
+              ) : activeStoryMediaUrl ? (
+                <img src={activeStoryMediaUrl} alt="Story" />
+              ) : (
+                <div className="story-viewer-empty">{activeStory.author.username?.[0]?.toUpperCase()}</div>
+              )}
+              {activeStory.content && <p className="story-viewer-caption">{activeStory.content}</p>}
+              {activeStory.track && (
+                <div className="story-viewer-song">
+                  {renderStaticTrack(activeStory.track)}
+                </div>
+              )}
+            </div>
+            {activeStoryIndex > 0 && (
+              <button className="story-viewer-nav previous" onClick={showPreviousStory} title="Previous story">
+                <FaChevronLeft />
+              </button>
+            )}
+            {activeStoryIndex < stories.length - 1 && (
+              <button className="story-viewer-nav next" onClick={showNextStory} title="Next story">
+                <FaChevronRight />
+              </button>
+            )}
+          </div>
+        </section>
+      )}
       {isStoryCreatorOpen && (
         <section
           className="story-creator-backdrop"
@@ -1016,14 +1150,20 @@ const SocialFeed = () => {
             ) : (
               <div className="story-edit-screen">
                 <div className="story-edit-preview">
-                  {storyPreview ? <img src={storyPreview} alt="Story preview" /> : <div className="story-edit-empty">{username?.[0]?.toUpperCase()}</div>}
+                  {storyPreview && storyMediaType === "video" ? (
+                    <video src={storyPreview} controls />
+                  ) : storyPreview ? (
+                    <img src={storyPreview} alt="Story preview" />
+                  ) : (
+                    <div className="story-edit-empty">{username?.[0]?.toUpperCase()}</div>
+                  )}
                   {storyPreview && <button className="clear-story-preview" onClick={() => setStoryFile(null)}><FaTimes /></button>}
                 </div>
                 <div className="story-edit-tools">
                   <label className="story-upload-large">
                     <FaCamera />
-                    Photo
-                    <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
+                    Photo or video
+                    <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={handleStoryPhotoChange} />
                   </label>
                   <textarea
                     value={storyContent}

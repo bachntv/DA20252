@@ -31,7 +31,9 @@ from utils.notifications import log_notification
 router = APIRouter()
 SOCIAL_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads", "social"))
 ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+ALLOWED_VIDEO_TYPES = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 
 def get_db():
@@ -154,10 +156,14 @@ def ensure_friendship(db: Session, user_id: str, friend_id: str):
 
 
 def serialize_story(db: Session, story: SocialStory, current_user_id: str):
+    media_url = story.media_url or story.image_url
+    media_type = story.media_type or ("image" if story.image_url else None)
     return {
         "id": story.id,
         "content": story.content,
         "image_url": story.image_url,
+        "media_url": media_url,
+        "media_type": media_type,
         "track": track_public(db, story.track_id),
         "story_type": story.story_type,
         "created_at": story.created_at.isoformat(),
@@ -241,6 +247,32 @@ async def save_social_image(image: UploadFile | None, request: Request):
         file.write(contents)
 
     return str(request.base_url).rstrip("/") + f"/uploads/social/{file_name}"
+
+
+async def save_social_story_media(media: UploadFile | None, request: Request):
+    if not media or not media.filename:
+        return None, None
+
+    image_extension = ALLOWED_IMAGE_TYPES.get(media.content_type)
+    video_extension = ALLOWED_VIDEO_TYPES.get(media.content_type)
+    extension = image_extension or video_extension
+    if not extension:
+        raise HTTPException(status_code=400, detail="Only images or MP4/WebM/MOV videos are supported")
+
+    contents = await media.read()
+    media_type = "image" if image_extension else "video"
+    max_bytes = MAX_IMAGE_BYTES if media_type == "image" else MAX_VIDEO_BYTES
+    if len(contents) > max_bytes:
+        limit = "5 MB" if media_type == "image" else "50 MB"
+        raise HTTPException(status_code=400, detail=f"{media_type.title()} must be {limit} or smaller")
+
+    os.makedirs(SOCIAL_UPLOAD_DIR, exist_ok=True)
+    file_name = f"{uuid4().hex}{extension}"
+    file_path = os.path.join(SOCIAL_UPLOAD_DIR, file_name)
+    with open(file_path, "wb") as file:
+        file.write(contents)
+
+    return str(request.base_url).rstrip("/") + f"/uploads/social/{file_name}", media_type
 
 
 @router.get("/feed")
@@ -498,6 +530,7 @@ async def create_story(
     content: str = Form(""),
     track_id: str | None = Form(None),
     story_type: str = Form("story"),
+    media: UploadFile | None = File(None),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -507,17 +540,20 @@ async def create_story(
     clean_story_type = story_type.strip().lower()
     if clean_story_type not in {"story", "reel"}:
         raise HTTPException(status_code=400, detail="Story type must be story or reel")
-    if not story_content and not image and not track_id:
-        raise HTTPException(status_code=400, detail="Story content, photo, or song is required")
+    upload = media or image
+    if not story_content and not upload and not track_id:
+        raise HTTPException(status_code=400, detail="Story content, media, or song is required")
 
     if track_id and not db.query(Song).filter(Song.track_id == track_id).first():
         raise HTTPException(status_code=404, detail="Track not found")
 
-    image_url = await save_social_image(image, request)
+    media_url, media_type = await save_social_story_media(upload, request)
     story = SocialStory(
         user_id=current_user.id,
         content=story_content,
-        image_url=image_url,
+        image_url=media_url if media_type == "image" else None,
+        media_url=media_url,
+        media_type=media_type or "image",
         track_id=track_id,
         story_type=clean_story_type,
     )
