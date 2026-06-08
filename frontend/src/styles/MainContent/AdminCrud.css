@@ -228,6 +228,43 @@
   margin: 8px 0 14px;
 }
 
+.editable-table-wrap {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.editable-data-table {
+  min-width: 960px;
+}
+
+.crud-cell-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  min-width: 120px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.crud-cell-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(168, 230, 207, 0.25);
+  outline: none;
+}
+
+.crud-cell-input.read-only {
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.crud-cell-textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
 /* Data Table */
 .data-table {
   width: 100%;

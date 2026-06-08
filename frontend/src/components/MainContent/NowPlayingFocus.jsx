@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import "../../styles/MainContent/NowPlayingFocus.css";
 import { createArtistArtwork, createTrackArtwork, getArtistArtwork, getTrackArtwork } from "../../utils/artwork";
+import { jwtDecode } from "jwt-decode";
+import { authFetch } from "../../utils/authFetch";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
@@ -11,19 +13,29 @@ const formatNumber = (value) => {
 
 const NowPlayingFocus = ({ mode, currentSong, artistInfo, onClose }) => {
   const [lyrics, setLyrics] = useState("");
+  const [lyricsDraft, setLyricsDraft] = useState("");
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [isSavingLyrics, setIsSavingLyrics] = useState(false);
+  const [lyricsError, setLyricsError] = useState("");
+  const token = localStorage.getItem("token");
+  const roles = token ? jwtDecode(token)?.roles || [] : [];
+  const canEditLyrics = roles.includes("artist");
+  const isLyricsEditMode = mode === "lyricsEdit" && canEditLyrics;
 
   useEffect(() => {
-    if (mode !== "lyrics" || !currentSong?.id) return;
+    if (!["lyrics", "lyricsEdit"].includes(mode) || !currentSong?.id) return;
 
     const fetchLyrics = async () => {
       setIsLoadingLyrics(true);
+      setLyricsError("");
       try {
         const res = await fetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`);
         const data = await res.json();
         setLyrics(data.lyrics || "");
+        setLyricsDraft(data.lyrics || "");
       } catch (err) {
         setLyrics("");
+        setLyricsDraft("");
       } finally {
         setIsLoadingLyrics(false);
       }
@@ -31,6 +43,30 @@ const NowPlayingFocus = ({ mode, currentSong, artistInfo, onClose }) => {
 
     fetchLyrics();
   }, [mode, currentSong?.id]);
+
+  const saveLyrics = async () => {
+    if (!currentSong?.id || !canEditLyrics || isSavingLyrics) return;
+    setIsSavingLyrics(true);
+    setLyricsError("");
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lyrics: lyricsDraft }),
+      });
+      if (!res.ok) {
+        throw new Error("Could not save lyrics");
+      }
+      const data = await res.json();
+      setLyrics(data.lyrics || "");
+      setLyricsDraft(data.lyrics || "");
+      window.dispatchEvent(new Event("lyricsUpdated"));
+    } catch (err) {
+      setLyricsError("Lyrics could not be saved.");
+    } finally {
+      setIsSavingLyrics(false);
+    }
+  };
 
   if (!currentSong) {
     return (
@@ -77,9 +113,26 @@ const NowPlayingFocus = ({ mode, currentSong, artistInfo, onClose }) => {
           <p>{currentSong.artist_name || currentSong.artist}</p>
         </div>
       </div>
-      <pre className="focus-lyrics">
-        {isLoadingLyrics ? "Loading lyrics..." : lyrics || "No lyrics added yet."}
-      </pre>
+      {isLyricsEditMode ? (
+        <div className="focus-lyrics-editor">
+          <textarea
+            value={lyricsDraft}
+            onChange={(e) => setLyricsDraft(e.target.value)}
+            placeholder="Add lyrics for this song"
+            disabled={isLoadingLyrics || isSavingLyrics}
+          />
+          <div className="focus-lyrics-actions">
+            {lyricsError && <span>{lyricsError}</span>}
+            <button onClick={saveLyrics} disabled={isLoadingLyrics || isSavingLyrics}>
+              {isSavingLyrics ? "Saving..." : "Save Lyrics"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <pre className="focus-lyrics">
+          {isLoadingLyrics ? "Loading lyrics..." : lyrics || "No lyrics added yet."}
+        </pre>
+      )}
     </section>
   );
 };

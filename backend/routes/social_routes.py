@@ -4,16 +4,26 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from models.base import SessionLocal
 from models.notification_log import NotificationLog
 from models.song import Song
-from models.social import SocialComment, SocialFollow, SocialLike, SocialPost, SocialShare
+from models.social import (
+    SocialComment,
+    SocialFollow,
+    SocialFriendRequest,
+    SocialFriendship,
+    SocialLike,
+    SocialMessage,
+    SocialPost,
+    SocialShare,
+    SocialStory,
+)
 from models.subscription import Subscription
 from models.user import User
-from routes.auth_routes import get_current_user
+from routes.auth_routes import get_current_artist_user, get_current_user
 from utils.format_ms import format_duration
 from utils.notifications import log_notification
 
@@ -49,6 +59,10 @@ class ShareCreate(BaseModel):
     content: str | None = None
 
 
+class MessageCreate(BaseModel):
+    content: str
+
+
 class LyricsUpdate(BaseModel):
     lyrics: str
 
@@ -57,6 +71,12 @@ def user_public(user: User | None):
     if not user:
         return {"id": None, "username": "Unknown user"}
     return {"id": user.id, "username": user.username}
+
+
+def user_summary(db: Session, user_id: str | None):
+    if not user_id:
+        return user_public(None)
+    return user_public(db.query(User).filter(User.id == user_id).first())
 
 
 def track_public(db: Session, track_id: str | None):
@@ -93,6 +113,68 @@ def notify(db: Session, user_id: str | None, event_type: str, title: str, messag
 def require_not_muted(user: User):
     if user.is_muted:
         raise HTTPException(status_code=403, detail="This account is muted and cannot post, comment, or share")
+
+
+def friendship_state(db: Session, current_user_id: str, target_user_id: str):
+    if current_user_id == target_user_id:
+        return {"status": "self", "request_id": None}
+
+    if db.query(SocialFriendship).filter(
+        SocialFriendship.user_id == current_user_id,
+        SocialFriendship.friend_id == target_user_id,
+    ).first():
+        return {"status": "friends", "request_id": None}
+
+    incoming = db.query(SocialFriendRequest).filter(
+        SocialFriendRequest.requester_id == target_user_id,
+        SocialFriendRequest.addressee_id == current_user_id,
+        SocialFriendRequest.status == "pending",
+    ).first()
+    if incoming:
+        return {"status": "incoming", "request_id": incoming.id}
+
+    outgoing = db.query(SocialFriendRequest).filter(
+        SocialFriendRequest.requester_id == current_user_id,
+        SocialFriendRequest.addressee_id == target_user_id,
+        SocialFriendRequest.status == "pending",
+    ).first()
+    if outgoing:
+        return {"status": "outgoing", "request_id": outgoing.id}
+
+    return {"status": "none", "request_id": None}
+
+
+def ensure_friendship(db: Session, user_id: str, friend_id: str):
+    existing = db.query(SocialFriendship).filter(
+        SocialFriendship.user_id == user_id,
+        SocialFriendship.friend_id == friend_id,
+    ).first()
+    if not existing:
+        db.add(SocialFriendship(user_id=user_id, friend_id=friend_id))
+
+
+def serialize_story(db: Session, story: SocialStory, current_user_id: str):
+    return {
+        "id": story.id,
+        "content": story.content,
+        "image_url": story.image_url,
+        "track": track_public(db, story.track_id),
+        "created_at": story.created_at.isoformat(),
+        "author": user_summary(db, story.user_id),
+        "is_owner": story.user_id == current_user_id,
+    }
+
+
+def serialize_message(db: Session, message: SocialMessage, current_user_id: str):
+    return {
+        "id": message.id,
+        "content": message.content,
+        "created_at": message.created_at.isoformat(),
+        "is_mine": message.sender_id == current_user_id,
+        "sender": user_summary(db, message.sender_id),
+        "recipient": user_summary(db, message.recipient_id),
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+    }
 
 
 def serialize_post(db: Session, post: SocialPost, current_user_id: str):
@@ -383,6 +465,269 @@ def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db)
     return serialize_post(db, post, current_user.id)
 
 
+@router.get("/stories")
+def get_stories(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    since = datetime.utcnow() - timedelta(hours=24)
+    friend_ids = [
+        row.friend_id
+        for row in db.query(SocialFriendship).filter(SocialFriendship.user_id == current_user.id).all()
+    ]
+    following_ids = [
+        row.following_id
+        for row in db.query(SocialFollow).filter(SocialFollow.follower_id == current_user.id).all()
+    ]
+    visible_user_ids = list({current_user.id, *friend_ids, *following_ids})
+
+    stories = (
+        db.query(SocialStory)
+        .filter(SocialStory.user_id.in_(visible_user_ids), SocialStory.created_at >= since)
+        .order_by(SocialStory.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    return [serialize_story(db, story, current_user.id) for story in stories]
+
+
+@router.post("/stories/photo")
+async def create_story(
+    request: Request,
+    content: str = Form(""),
+    track_id: str | None = Form(None),
+    image: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_not_muted(current_user)
+    story_content = content.strip()
+    if not story_content and not image and not track_id:
+        raise HTTPException(status_code=400, detail="Story content, photo, or song is required")
+
+    if track_id and not db.query(Song).filter(Song.track_id == track_id).first():
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    image_url = await save_social_image(image, request)
+    story = SocialStory(
+        user_id=current_user.id,
+        content=story_content,
+        image_url=image_url,
+        track_id=track_id,
+    )
+    db.add(story)
+    db.commit()
+    db.refresh(story)
+    return serialize_story(db, story, current_user.id)
+
+
+@router.delete("/stories/{story_id}")
+def delete_story(story_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if story.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own stories")
+
+    db.delete(story)
+    db.commit()
+    return {"message": "Story deleted", "story_id": story_id}
+
+
+@router.get("/friends")
+def get_friends(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    friend_rows = db.query(SocialFriendship).filter(SocialFriendship.user_id == current_user.id).all()
+    friends = [
+        user_summary(db, row.friend_id)
+        for row in friend_rows
+    ]
+
+    incoming_rows = db.query(SocialFriendRequest).filter(
+        SocialFriendRequest.addressee_id == current_user.id,
+        SocialFriendRequest.status == "pending",
+    ).order_by(SocialFriendRequest.created_at.desc()).all()
+    outgoing_rows = db.query(SocialFriendRequest).filter(
+        SocialFriendRequest.requester_id == current_user.id,
+        SocialFriendRequest.status == "pending",
+    ).order_by(SocialFriendRequest.created_at.desc()).all()
+
+    excluded_ids = {current_user.id, *[friend["id"] for friend in friends]}
+    excluded_ids.update(row.requester_id for row in incoming_rows)
+    excluded_ids.update(row.addressee_id for row in outgoing_rows)
+    suggestions_query = db.query(User).filter(User.id != current_user.id).order_by(User.username.asc()).limit(50).all()
+    suggestions = [
+        user_public(user)
+        for user in suggestions_query
+        if user.id not in excluded_ids
+    ][:8]
+
+    return {
+        "friends": friends,
+        "incoming_requests": [
+            {
+                "id": row.id,
+                "created_at": row.created_at.isoformat(),
+                "user": user_summary(db, row.requester_id),
+            }
+            for row in incoming_rows
+        ],
+        "outgoing_requests": [
+            {
+                "id": row.id,
+                "created_at": row.created_at.isoformat(),
+                "user": user_summary(db, row.addressee_id),
+            }
+            for row in outgoing_rows
+        ],
+        "suggestions": suggestions,
+    }
+
+
+@router.post("/friends/requests/{user_id}")
+def request_friend(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot add yourself")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    state = friendship_state(db, current_user.id, user_id)
+    if state["status"] == "friends":
+        return {"status": "friends"}
+
+    if state["status"] == "incoming" and state["request_id"]:
+        return accept_friend_request(state["request_id"], db, current_user)
+
+    existing = db.query(SocialFriendRequest).filter(
+        SocialFriendRequest.requester_id == current_user.id,
+        SocialFriendRequest.addressee_id == user_id,
+    ).first()
+    if existing:
+        existing.status = "pending"
+        existing.updated_at = datetime.utcnow()
+        request = existing
+    else:
+        request = SocialFriendRequest(requester_id=current_user.id, addressee_id=user_id)
+        db.add(request)
+
+    notify(db, user_id, "friend_request", "Friend request", f"{current_user.username} sent you a friend request.")
+    db.commit()
+    db.refresh(request)
+    return {"status": "outgoing", "request_id": request.id}
+
+
+@router.put("/friends/requests/{request_id}/accept")
+def accept_friend_request(request_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    request = db.query(SocialFriendRequest).filter(SocialFriendRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Friend request not found")
+    if request.addressee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only accept requests sent to you")
+
+    request.status = "accepted"
+    request.updated_at = datetime.utcnow()
+    ensure_friendship(db, request.requester_id, request.addressee_id)
+    ensure_friendship(db, request.addressee_id, request.requester_id)
+    notify(db, request.requester_id, "friend_request_accepted", "Friend request accepted", f"{current_user.username} accepted your friend request.")
+    db.commit()
+    return {"status": "friends", "friend": user_summary(db, request.requester_id)}
+
+
+@router.delete("/friends/requests/{request_id}")
+def remove_friend_request(request_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    request = db.query(SocialFriendRequest).filter(SocialFriendRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Friend request not found")
+    if current_user.id not in {request.requester_id, request.addressee_id}:
+        raise HTTPException(status_code=403, detail="You cannot update this request")
+
+    db.delete(request)
+    db.commit()
+    return {"status": "removed", "request_id": request_id}
+
+
+@router.delete("/friends/{user_id}")
+def remove_friend(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db.query(SocialFriendship).filter(
+        or_(
+            and_(SocialFriendship.user_id == current_user.id, SocialFriendship.friend_id == user_id),
+            and_(SocialFriendship.user_id == user_id, SocialFriendship.friend_id == current_user.id),
+        )
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "removed", "user_id": user_id}
+
+
+@router.get("/messages/threads")
+def get_message_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rows = (
+        db.query(SocialMessage)
+        .filter(or_(SocialMessage.sender_id == current_user.id, SocialMessage.recipient_id == current_user.id))
+        .order_by(SocialMessage.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    threads = {}
+    for message in rows:
+        partner_id = message.recipient_id if message.sender_id == current_user.id else message.sender_id
+        if partner_id not in threads:
+            threads[partner_id] = {
+                "user": user_summary(db, partner_id),
+                "latest_message": serialize_message(db, message, current_user.id),
+                "unread_count": 0,
+            }
+        if message.recipient_id == current_user.id and message.read_at is None:
+            threads[partner_id]["unread_count"] += 1
+
+    return list(threads.values())
+
+
+@router.get("/messages/{user_id}")
+def get_messages(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    messages = (
+        db.query(SocialMessage)
+        .filter(
+            or_(
+                and_(SocialMessage.sender_id == current_user.id, SocialMessage.recipient_id == user_id),
+                and_(SocialMessage.sender_id == user_id, SocialMessage.recipient_id == current_user.id),
+            )
+        )
+        .order_by(SocialMessage.created_at.asc())
+        .limit(100)
+        .all()
+    )
+    unread = [message for message in messages if message.recipient_id == current_user.id and message.read_at is None]
+    for message in unread:
+        message.read_at = datetime.utcnow()
+    if unread:
+        db.commit()
+
+    return {
+        "user": user_public(target),
+        "messages": [serialize_message(db, message, current_user.id) for message in messages],
+    }
+
+
+@router.post("/messages/{user_id}")
+def send_message(user_id: str, payload: MessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Message content is required")
+
+    message = SocialMessage(sender_id=current_user.id, recipient_id=user_id, content=content)
+    db.add(message)
+    notify(db, user_id, "new_message", "New message", f"{current_user.username} sent you a message.")
+    db.commit()
+    db.refresh(message)
+    return serialize_message(db, message, current_user.id)
+
+
 @router.get("/users")
 def search_users(q: str = "", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     users = (
@@ -401,6 +746,7 @@ def search_users(q: str = "", db: Session = Depends(get_db), current_user: User 
             "id": user.id,
             "username": user.username,
             "is_following": user.id in following,
+            "friendship": friendship_state(db, current_user.id, user.id),
         }
         for user in users
     ]
@@ -500,7 +846,7 @@ def get_lyrics(track_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/tracks/{track_id}/lyrics")
-def update_lyrics(track_id: str, payload: LyricsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_lyrics(track_id: str, payload: LyricsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_artist_user)):
     song = db.query(Song).filter(Song.track_id == track_id).first()
     if not song:
         raise HTTPException(status_code=404, detail="Track not found")

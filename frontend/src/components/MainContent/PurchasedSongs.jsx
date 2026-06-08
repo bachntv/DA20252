@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaPlay } from "react-icons/fa";
+import { FaDownload, FaPlay } from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
 import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
@@ -52,6 +52,25 @@ const PurchasedSongs = () => {
     }
   };
 
+  const downloadPurchasedSong = async (track) => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/music/user/purchases/${track.id}/download`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Download unavailable");
+
+      const link = document.createElement("a");
+      link.href = data.url;
+      link.download = data.filename || `${track.title}.mp3`;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Failed to download purchased song", err);
+      alert(err.message || "Failed to download purchased song");
+    }
+  };
+
   return (
     <div className="search-results-page purchased-page">
       <div className="purchased-hero">
@@ -79,6 +98,7 @@ const PurchasedSongs = () => {
               <th className="col-album">Album</th>
               <th className="col-duration">Duration</th>
               <th className="col-date">Purchased</th>
+              <th className="col-actions">Offline</th>
             </tr>
           </thead>
           <tbody>
@@ -115,6 +135,17 @@ const PurchasedSongs = () => {
                   <td className="col-duration">{track.duration}</td>
                   <td className="col-date">
                     {track.purchased_at ? new Date(track.purchased_at).toLocaleDateString() : ""}
+                  </td>
+                  <td className="col-actions">
+                    <button
+                      className="download-song-button"
+                      type="button"
+                      onClick={() => downloadPurchasedSong(track)}
+                      title="Download for offline listening"
+                    >
+                      <FaDownload />
+                      Download
+                    </button>
                   </td>
                 </tr>
               );

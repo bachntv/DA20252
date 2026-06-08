@@ -60,3 +60,47 @@ class SocialShare(Base):
     post_id = Column(String, ForeignKey("social_posts.id"), nullable=False, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SocialFriendRequest(Base):
+    __tablename__ = "social_friend_requests"
+    __table_args__ = (UniqueConstraint("requester_id", "addressee_id", name="uq_social_friend_request_pair"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    requester_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    addressee_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SocialFriendship(Base):
+    __tablename__ = "social_friendships"
+    __table_args__ = (UniqueConstraint("user_id", "friend_id", name="uq_social_friendship_pair"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    friend_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SocialMessage(Base):
+    __tablename__ = "social_messages"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    sender_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    recipient_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    read_at = Column(DateTime, nullable=True)
+
+
+class SocialStory(Base):
+    __tablename__ = "social_stories"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False, default="")
+    image_url = Column(String, nullable=True)
+    track_id = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

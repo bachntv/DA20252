@@ -1,5 +1,23 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaCamera, FaComment, FaEdit, FaHeart, FaRegHeart, FaRetweet, FaSave, FaTimes, FaTrash, FaUserPlus, FaUserCheck } from "react-icons/fa";
+import {
+  FaCamera,
+  FaCheck,
+  FaComment,
+  FaEdit,
+  FaHeart,
+  FaImage,
+  FaMusic,
+  FaPaperPlane,
+  FaRegHeart,
+  FaRetweet,
+  FaSave,
+  FaSearch,
+  FaTimes,
+  FaTrash,
+  FaUserCheck,
+  FaUserFriends,
+  FaUserPlus,
+} from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
 import { createTrackArtwork, getTrackArtwork } from "../../utils/artwork";
@@ -11,10 +29,20 @@ const SocialFeed = () => {
   const { currentSong } = usePlayer();
   const [scope, setScope] = useState("all");
   const [posts, setPosts] = useState([]);
+  const [stories, setStories] = useState([]);
+  const [friends, setFriends] = useState({ friends: [], incoming_requests: [], outgoing_requests: [], suggestions: [] });
+  const [threads, setThreads] = useState([]);
+  const [activeChatUser, setActiveChatUser] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageDraft, setMessageDraft] = useState("");
   const [content, setContent] = useState("");
   const [attachSong, setAttachSong] = useState(true);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
+  const [storyFile, setStoryFile] = useState(null);
+  const [storyPreview, setStoryPreview] = useState("");
+  const [storyContent, setStoryContent] = useState("");
+  const [storyAttachSong, setStoryAttachSong] = useState(false);
   const [comments, setComments] = useState({});
   const [shareText, setShareText] = useState({});
   const [users, setUsers] = useState([]);
@@ -38,6 +66,41 @@ const SocialFeed = () => {
     }
   }, [scope]);
 
+  const fetchStories = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/stories`);
+      const data = await res.json();
+      setStories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch stories", err);
+    }
+  }, []);
+
+  const fetchFriends = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/friends`);
+      const data = await res.json();
+      setFriends({
+        friends: data.friends || [],
+        incoming_requests: data.incoming_requests || [],
+        outgoing_requests: data.outgoing_requests || [],
+        suggestions: data.suggestions || [],
+      });
+    } catch (err) {
+      console.error("Failed to fetch friends", err);
+    }
+  }, []);
+
+  const fetchThreads = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/messages/threads`);
+      const data = await res.json();
+      setThreads(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch messages", err);
+    }
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await authFetch(`${API_BASE}/api/social/users?q=${encodeURIComponent(userQuery)}`);
@@ -51,6 +114,12 @@ const SocialFeed = () => {
   useEffect(() => {
     fetchFeed();
   }, [fetchFeed]);
+
+  useEffect(() => {
+    fetchStories();
+    fetchFriends();
+    fetchThreads();
+  }, [fetchStories, fetchFriends, fetchThreads]);
 
   useEffect(() => {
     window.addEventListener("socialFeedUpdated", fetchFeed);
@@ -72,6 +141,25 @@ const SocialFeed = () => {
     setPhotoPreview(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [photoFile]);
+
+  useEffect(() => {
+    if (!storyFile) {
+      setStoryPreview("");
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(storyFile);
+    setStoryPreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [storyFile]);
+
+  const refreshSocial = () => {
+    fetchFeed();
+    fetchStories();
+    fetchFriends();
+    fetchThreads();
+    fetchUsers();
+  };
 
   const createPost = async () => {
     if (!content.trim() && !photoFile) return;
@@ -97,17 +185,44 @@ const SocialFeed = () => {
       }
       setContent("");
       setPhotoFile(null);
-      fetchFeed();
+      refreshSocial();
     } catch (err) {
       console.error("Failed to create post", err);
     }
   };
 
+  const createStory = async () => {
+    const trackId = storyAttachSong && currentSong?.id ? currentSong.id : null;
+    if (!storyContent.trim() && !storyFile && !trackId) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("content", storyContent);
+      if (trackId) formData.append("track_id", trackId);
+      if (storyFile) formData.append("image", storyFile);
+      await authFetch(`${API_BASE}/api/social/stories/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      setStoryContent("");
+      setStoryFile(null);
+      setStoryAttachSong(false);
+      fetchStories();
+    } catch (err) {
+      console.error("Failed to create story", err);
+    }
+  };
+
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return;
+    if (!file || !file.type.startsWith("image/")) return;
     setPhotoFile(file);
+  };
+
+  const handleStoryPhotoChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    setStoryFile(file);
   };
 
   const toggleLike = async (postId) => {
@@ -137,16 +252,6 @@ const SocialFeed = () => {
     }
   };
 
-  const startEditPost = (post) => {
-    setEditingPostId(post.id);
-    setEditingPostContent(post.content);
-  };
-
-  const cancelEditPost = () => {
-    setEditingPostId(null);
-    setEditingPostContent("");
-  };
-
   const savePost = async (postId) => {
     const value = editingPostContent.trim();
     if (!value) return;
@@ -159,7 +264,8 @@ const SocialFeed = () => {
       });
       const post = await res.json();
       setPosts((prev) => prev.map((item) => (item.id === postId ? post : item)));
-      cancelEditPost();
+      setEditingPostId(null);
+      setEditingPostContent("");
     } catch (err) {
       console.error("Failed to edit post", err);
     }
@@ -176,16 +282,6 @@ const SocialFeed = () => {
     }
   };
 
-  const startEditComment = (comment) => {
-    setEditingCommentId(comment.id);
-    setEditingCommentContent(comment.content);
-  };
-
-  const cancelEditComment = () => {
-    setEditingCommentId(null);
-    setEditingCommentContent("");
-  };
-
   const saveComment = async (postId, commentId) => {
     const value = editingCommentContent.trim();
     if (!value) return;
@@ -198,7 +294,8 @@ const SocialFeed = () => {
       });
       const post = await res.json();
       setPosts((prev) => prev.map((item) => (item.id === postId ? post : item)));
-      cancelEditComment();
+      setEditingCommentId(null);
+      setEditingCommentContent("");
     } catch (err) {
       console.error("Failed to edit comment", err);
     }
@@ -226,6 +323,7 @@ const SocialFeed = () => {
       const post = await res.json();
       setPosts((prev) => [post, ...prev]);
       setShareText((prev) => ({ ...prev, [postId]: "" }));
+      fetchThreads();
     } catch (err) {
       console.error("Failed to share post", err);
     }
@@ -236,14 +334,68 @@ const SocialFeed = () => {
       await authFetch(`${API_BASE}/api/social/users/${user.id}/follow`, {
         method: user.is_following ? "DELETE" : "POST",
       });
-      setUsers((prev) =>
-        prev.map((item) =>
-          item.id === user.id ? { ...item, is_following: !item.is_following } : item
-        )
-      );
-      fetchFeed();
+      refreshSocial();
     } catch (err) {
       console.error("Failed to follow user", err);
+    }
+  };
+
+  const requestFriend = async (userId) => {
+    try {
+      await authFetch(`${API_BASE}/api/social/friends/requests/${userId}`, { method: "POST" });
+      refreshSocial();
+    } catch (err) {
+      console.error("Failed to add friend", err);
+    }
+  };
+
+  const acceptFriend = async (requestId) => {
+    try {
+      await authFetch(`${API_BASE}/api/social/friends/requests/${requestId}/accept`, { method: "PUT" });
+      refreshSocial();
+    } catch (err) {
+      console.error("Failed to accept friend request", err);
+    }
+  };
+
+  const removeFriendRequest = async (requestId) => {
+    try {
+      await authFetch(`${API_BASE}/api/social/friends/requests/${requestId}`, { method: "DELETE" });
+      refreshSocial();
+    } catch (err) {
+      console.error("Failed to remove friend request", err);
+    }
+  };
+
+  const openChat = async (user) => {
+    if (!user?.id) return;
+    setActiveChatUser(user);
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/messages/${user.id}`);
+      const data = await res.json();
+      setMessages(data.messages || []);
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to open chat", err);
+    }
+  };
+
+  const sendMessage = async () => {
+    const value = messageDraft.trim();
+    if (!value || !activeChatUser?.id) return;
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/messages/${activeChatUser.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: value }),
+      });
+      const message = await res.json();
+      setMessages((prev) => [...prev, message]);
+      setMessageDraft("");
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to send message", err);
     }
   };
 
@@ -261,40 +413,121 @@ const SocialFeed = () => {
         />
         <div>
           <p>{track.title}</p>
-          <span>{track.duration}</span>
+          <span>{track.duration || "Song"}</span>
         </div>
       </div>
     );
   };
 
+  const renderFriendButton = (user) => {
+    const friendship = user.friendship || { status: "none" };
+    if (friendship.status === "friends") {
+      return <button className="quiet-action"><FaUserCheck /> Friends</button>;
+    }
+    if (friendship.status === "incoming") {
+      return <button onClick={() => acceptFriend(friendship.request_id)}><FaCheck /> Accept</button>;
+    }
+    if (friendship.status === "outgoing") {
+      return <button className="quiet-action" onClick={() => removeFriendRequest(friendship.request_id)}><FaTimes /> Sent</button>;
+    }
+    return <button onClick={() => requestFriend(user.id)}><FaUserPlus /> Add</button>;
+  };
+
+  const currentTrack = currentSong
+    ? {
+        id: currentSong.id,
+        title: currentSong.track_name || currentSong.title,
+        cover_url: currentSong.cover_url || currentSong.image_url,
+        duration: currentSong.duration,
+      }
+    : null;
+
   return (
-    <div className="social-page">
-      <section className="social-feed">
+    <div className="social-page facebook-shell">
+      <aside className="social-left-rail">
+        <h2>Social</h2>
+        <button className="rail-item active"><FaUserFriends /> Feed</button>
+        <button className="rail-item"><FaComment /> Messages</button>
+        <button className="rail-item"><FaCamera /> Stories</button>
+        <div className="rail-card">
+          <span>Now playing</span>
+          {currentTrack ? renderTrack(currentTrack) : <p>No song selected.</p>}
+        </div>
+      </aside>
+
+      <main className="social-feed">
         <div className="social-topbar">
-          <h2>Social Feed</h2>
+          <div>
+            <h2>Home</h2>
+            <p>Posts, songs, friends, and stories from your circle.</p>
+          </div>
           <div className="scope-toggle">
             <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
             <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
           </div>
         </div>
 
-        <div className="composer">
+        <section className="stories-card">
+          <div className="story-composer">
+            <label className="story-upload">
+              <FaImage />
+              <input type="file" accept="image/*" onChange={handleStoryPhotoChange} />
+            </label>
+            <input
+              value={storyContent}
+              onChange={(e) => setStoryContent(e.target.value)}
+              placeholder="Create a story"
+            />
+            <label className="story-song-toggle">
+              <input
+                type="checkbox"
+                checked={storyAttachSong}
+                onChange={(e) => setStoryAttachSong(e.target.checked)}
+              />
+              Song
+            </label>
+            <button onClick={createStory}>Share</button>
+          </div>
+          {storyPreview && (
+            <div className="story-preview">
+              <img src={storyPreview} alt="Story preview" />
+              <button onClick={() => setStoryFile(null)}><FaTimes /></button>
+            </div>
+          )}
+          <div className="story-tray">
+            {stories.length === 0 ? (
+              <div className="story-tile empty-story">No stories yet</div>
+            ) : (
+              stories.map((story) => (
+                <div className="story-tile" key={story.id}>
+                  {story.image_url ? <img src={story.image_url} alt="Story" /> : <div className="story-gradient" />}
+                  <div className="story-overlay">
+                    <strong>{story.author.username}</strong>
+                    <span>{story.content || story.track?.title || "Shared a story"}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="composer">
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Share what you are listening to..."
+            placeholder="What's on your mind?"
           />
           <div className="composer-actions">
             <div className="composer-options">
-              <label>
+              <label className="composer-pill">
                 <input
                   type="checkbox"
                   checked={attachSong}
                   onChange={(e) => setAttachSong(e.target.checked)}
                 />
-                Attach current song
+                <FaMusic /> Current song
               </label>
-              <label className="photo-picker">
+              <label className="composer-pill photo-picker">
                 <FaCamera />
                 Photo
                 <input type="file" accept="image/*" onChange={handlePhotoChange} />
@@ -310,13 +543,8 @@ const SocialFeed = () => {
               </button>
             </div>
           )}
-          {attachSong && currentSong && renderTrack({
-            id: currentSong.id,
-            title: currentSong.track_name || currentSong.title,
-            cover_url: currentSong.cover_url || currentSong.image_url,
-            duration: currentSong.duration,
-          })}
-        </div>
+          {attachSong && currentTrack && renderTrack(currentTrack)}
+        </section>
 
         {loading ? (
           <div className="social-empty">Loading feed...</div>
@@ -338,11 +566,11 @@ const SocialFeed = () => {
                     {editingPostId === post.id ? (
                       <>
                         <button onClick={() => savePost(post.id)} title="Save post"><FaSave /></button>
-                        <button onClick={cancelEditPost} title="Cancel"><FaTimes /></button>
+                        <button onClick={() => setEditingPostId(null)} title="Cancel"><FaTimes /></button>
                       </>
                     ) : (
                       <>
-                        <button onClick={() => startEditPost(post)} title="Edit post"><FaEdit /></button>
+                        <button onClick={() => { setEditingPostId(post.id); setEditingPostContent(post.content); }} title="Edit post"><FaEdit /></button>
                         <button onClick={() => deletePost(post.id)} title="Delete post"><FaTrash /></button>
                       </>
                     )}
@@ -359,20 +587,18 @@ const SocialFeed = () => {
               ) : (
                 <p className="post-content">{post.content}</p>
               )}
-              {post.image_url && (
-                <img className="post-photo" src={post.image_url} alt="Shared post" />
-              )}
+              {post.image_url && <img className="post-photo" src={post.image_url} alt="Shared post" />}
               {renderTrack(post.track)}
 
               <div className="post-actions">
                 <button className={post.is_liked ? "active" : ""} onClick={() => toggleLike(post.id)}>
-                  {post.is_liked ? <FaHeart /> : <FaRegHeart />} {post.like_count}
+                  {post.is_liked ? <FaHeart /> : <FaRegHeart />} Like {post.like_count}
                 </button>
                 <button>
-                  <FaComment /> {post.comment_count}
+                  <FaComment /> Comment {post.comment_count}
                 </button>
                 <button onClick={() => sharePost(post.id)}>
-                  <FaRetweet /> {post.share_count}
+                  <FaRetweet /> Share {post.share_count}
                 </button>
               </div>
 
@@ -395,7 +621,7 @@ const SocialFeed = () => {
                           onChange={(e) => setEditingCommentContent(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") saveComment(post.id, comment.id);
-                            if (e.key === "Escape") cancelEditComment();
+                            if (e.key === "Escape") setEditingCommentId(null);
                           }}
                         />
                       ) : (
@@ -407,11 +633,11 @@ const SocialFeed = () => {
                         {editingCommentId === comment.id ? (
                           <>
                             <button onClick={() => saveComment(post.id, comment.id)} title="Save comment"><FaSave /></button>
-                            <button onClick={cancelEditComment} title="Cancel"><FaTimes /></button>
+                            <button onClick={() => setEditingCommentId(null)} title="Cancel"><FaTimes /></button>
                           </>
                         ) : (
                           <>
-                            <button onClick={() => startEditComment(comment)} title="Edit comment"><FaEdit /></button>
+                            <button onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }} title="Edit comment"><FaEdit /></button>
                             <button onClick={() => deleteComment(post.id, comment.id)} title="Delete comment"><FaTrash /></button>
                           </>
                         )}
@@ -434,28 +660,131 @@ const SocialFeed = () => {
             </article>
           ))
         )}
-      </section>
+      </main>
 
-      <aside className="follow-panel">
-        <h3>Find people</h3>
-        <input
-          value={userQuery}
-          onChange={(e) => setUserQuery(e.target.value)}
-          placeholder="Search users"
-        />
-        <div className="user-list">
-          {users.map((user) => (
-            <div className="user-row" key={user.id}>
-              <div className="post-avatar">{user.username?.[0]?.toUpperCase()}</div>
-              <span>{user.username}</span>
-              <button onClick={() => toggleFollow(user)}>
-                {user.is_following ? <FaUserCheck /> : <FaUserPlus />}
-                {user.is_following ? "Following" : "Follow"}
-              </button>
-            </div>
-          ))}
-        </div>
+      <aside className="social-right-rail">
+        <section className="side-panel">
+          <div className="panel-title">
+            <h3>Friend Requests</h3>
+            <FaUserFriends />
+          </div>
+          {friends.incoming_requests.length === 0 ? (
+            <p className="panel-empty">No pending requests.</p>
+          ) : (
+            friends.incoming_requests.map((request) => (
+              <div className="person-row" key={request.id}>
+                <div className="post-avatar">{request.user.username?.[0]?.toUpperCase()}</div>
+                <span>{request.user.username}</span>
+                <button onClick={() => acceptFriend(request.id)}><FaCheck /></button>
+                <button className="quiet-action" onClick={() => removeFriendRequest(request.id)}><FaTimes /></button>
+              </div>
+            ))
+          )}
+        </section>
+
+        <section className="side-panel">
+          <div className="panel-title">
+            <h3>Find Friends</h3>
+            <FaSearch />
+          </div>
+          <input
+            className="people-search"
+            value={userQuery}
+            onChange={(e) => setUserQuery(e.target.value)}
+            placeholder="Search users"
+          />
+          <div className="user-list">
+            {[...users, ...friends.suggestions].filter((user, index, arr) => (
+              arr.findIndex((item) => item.id === user.id) === index
+            )).slice(0, 8).map((user) => (
+              <div className="user-row" key={user.id}>
+                <div className="post-avatar">{user.username?.[0]?.toUpperCase()}</div>
+                <span>{user.username}</span>
+                {user.friendship ? renderFriendButton(user) : <button onClick={() => requestFriend(user.id)}><FaUserPlus /> Add</button>}
+                <button className="quiet-action" onClick={() => toggleFollow(user)}>
+                  {user.is_following ? <FaUserCheck /> : <FaUserPlus />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="side-panel">
+          <div className="panel-title">
+            <h3>Contacts</h3>
+            <FaComment />
+          </div>
+          <div className="user-list">
+            {friends.friends.length === 0 ? (
+              <p className="panel-empty">Add friends to start messaging.</p>
+            ) : (
+              friends.friends.map((friend) => (
+                <button className="contact-row" key={friend.id} onClick={() => openChat(friend)}>
+                  <div className="post-avatar">{friend.username?.[0]?.toUpperCase()}</div>
+                  <span>{friend.username}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="side-panel">
+          <div className="panel-title">
+            <h3>Messages</h3>
+            <FaPaperPlane />
+          </div>
+          <div className="thread-list">
+            {threads.length === 0 ? (
+              <p className="panel-empty">No messages yet.</p>
+            ) : (
+              threads.map((thread) => (
+                <button className="thread-row" key={thread.user.id} onClick={() => openChat(thread.user)}>
+                  <div className="post-avatar">{thread.user.username?.[0]?.toUpperCase()}</div>
+                  <div>
+                    <strong>{thread.user.username}</strong>
+                    <span>{thread.latest_message.content}</span>
+                  </div>
+                  {thread.unread_count > 0 && <b>{thread.unread_count}</b>}
+                </button>
+              ))
+            )}
+          </div>
+        </section>
       </aside>
+
+      {activeChatUser && (
+        <section className="chat-dock">
+          <div className="chat-header">
+            <div>
+              <strong>{activeChatUser.username}</strong>
+              <span>Direct message</span>
+            </div>
+            <button onClick={() => setActiveChatUser(null)}><FaTimes /></button>
+          </div>
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <p className="panel-empty">Say hello.</p>
+            ) : (
+              messages.map((message) => (
+                <div className={`chat-bubble ${message.is_mine ? "mine" : ""}`} key={message.id}>
+                  {message.content}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="chat-input">
+            <input
+              value={messageDraft}
+              onChange={(e) => setMessageDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendMessage();
+              }}
+              placeholder="Message"
+            />
+            <button onClick={sendMessage}><FaPaperPlane /></button>
+          </div>
+        </section>
+      )}
     </div>
   );
 };

@@ -18,7 +18,7 @@ const getPrimaryArtistId = (song) => {
   return artistId ? String(artistId).split(", ")[0] : null;
 };
 
-const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistPage }) => {
+const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics, onOpenArtistPage }) => {
   const [relatedSongs, setRelatedSongs] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -26,10 +26,10 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
   const menuRefs = useRef({});
   const token = localStorage.getItem("token");
   const userId = token ? jwtDecode(token)?.sub : null;
+  const roles = token ? jwtDecode(token)?.roles || [] : [];
+  const canEditLyrics = roles.includes("artist");
   const { playSong, queue, setQueue, isPlaying, removeFromQueue } = usePlayer();
   const [lyrics, setLyrics] = useState("");
-  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
-  const [lyricsDraft, setLyricsDraft] = useState("");
   const [artistInfo, setArtistInfo] = useState(null);
   const [isArtistFollowed, setIsArtistFollowed] = useState(false);
   const [purchaseState, setPurchaseState] = useState({ owned: false, amount: 15000, currency: "VND" });
@@ -90,15 +90,14 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
         const res = await fetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`);
         const data = await res.json();
         setLyrics(data.lyrics || "");
-        setLyricsDraft(data.lyrics || "");
-        setIsEditingLyrics(false);
       } catch (err) {
         setLyrics("");
-        setLyricsDraft("");
       }
     };
 
     fetchLyrics();
+    window.addEventListener("lyricsUpdated", fetchLyrics);
+    return () => window.removeEventListener("lyricsUpdated", fetchLyrics);
   }, [currentSong?.id]);
 
   useEffect(() => {
@@ -184,22 +183,6 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
       window.dispatchEvent(new Event("artistUpdated"));
     } catch (err) {
       console.error("Failed to update artist follow state", err);
-    }
-  };
-
-  const saveLyrics = async () => {
-    if (!currentSong?.id) return;
-    try {
-      const res = await authFetch(`${API_BASE}/api/social/tracks/${currentSong.id}/lyrics`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lyrics: lyricsDraft }),
-      });
-      const data = await res.json();
-      setLyrics(data.lyrics || "");
-      setIsEditingLyrics(false);
-    } catch (err) {
-      console.error("Failed to save lyrics", err);
     }
   };
 
@@ -416,20 +399,10 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onOpenArtistP
               <h4>Lyrics</h4>
               <div className="lyrics-actions">
                 <button onClick={onShowLyrics}>Open</button>
-                <button onClick={() => (isEditingLyrics ? saveLyrics() : setIsEditingLyrics(true))}>
-                  {isEditingLyrics ? "Save" : "Edit"}
-                </button>
+                {canEditLyrics && <button onClick={onEditLyrics}>Edit</button>}
               </div>
             </div>
-            {isEditingLyrics ? (
-              <textarea
-                value={lyricsDraft}
-                onChange={(e) => setLyricsDraft(e.target.value)}
-                placeholder="Add lyrics for this song"
-              />
-            ) : (
-              <p className="lyrics-text">{lyrics || "No lyrics added yet."}</p>
-            )}
+            <p className="lyrics-text">{lyrics || "No lyrics added yet."}</p>
           </div>
           {artistInfo && (
             <section

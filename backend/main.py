@@ -17,7 +17,17 @@ from models.plan import Plan
 from models.subscription import Subscription
 from models.payment import Payment
 from models.notification_log import NotificationLog
-from models.social import SocialComment, SocialFollow, SocialLike, SocialPost, SocialShare
+from models.social import (
+    SocialComment,
+    SocialFollow,
+    SocialFriendRequest,
+    SocialFriendship,
+    SocialLike,
+    SocialMessage,
+    SocialPost,
+    SocialShare,
+    SocialStory,
+)
 from models.song_purchase import SongPurchase
 from routes.auth_routes import router as auth_router
 from routes.music_routes import router as music_router

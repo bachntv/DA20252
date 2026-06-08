@@ -50,3 +50,24 @@
   margin: 14px 0 0;
   opacity: 0.88;
 }
+
+.download-song-button {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  padding: 7px 11px;
+  white-space: nowrap;
+}
+
+.download-song-button:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}

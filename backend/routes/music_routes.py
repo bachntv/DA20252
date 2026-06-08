@@ -253,6 +253,39 @@ def get_purchased_songs(
     return [serialize_purchase_track(row) for row in rows]
 
 
+@router.get("/user/purchases/{track_id}/download")
+def get_purchased_song_download(
+    track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    purchase = db.query(SongPurchase).filter(
+        SongPurchase.user_id == current_user.id,
+        SongPurchase.track_id == track_id,
+    ).first()
+    if not purchase:
+        raise HTTPException(status_code=403, detail="Buy this song before downloading it")
+
+    song = db.query(Song).filter(
+        Song.track_id == track_id,
+        Song.is_active == True,
+        Song.approval_status == "approved",
+    ).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Track is unavailable")
+
+    download_url = song.audio_url or generate_presigned_url(song.track_name)
+    if not download_url:
+        raise HTTPException(status_code=404, detail="Download file is unavailable")
+
+    safe_title = "".join(char for char in song.track_name if char.isalnum() or char in (" ", "-", "_")).strip()
+    return {
+        "url": download_url,
+        "filename": f"{safe_title or track_id}.mp3",
+        "expires_in_seconds": None if song.audio_url else 3600,
+    }
+
+
 @router.get("/user/purchases/{track_id}")
 def get_purchase_status(
     track_id: str,

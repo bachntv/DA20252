@@ -84,7 +84,7 @@ def get_current_artist_user(token: str = Depends(oauth2_scheme), db: Session = D
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         roles = payload.get("roles", [])
-        if user_id is None or ("artist" not in roles and "admin" not in roles):
+        if user_id is None or "artist" not in roles:
             raise HTTPException(status_code=403, detail="Artist access required")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")

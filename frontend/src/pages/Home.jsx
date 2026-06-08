@@ -172,6 +172,7 @@ const Home = () => {
           currentSong={currentSong} 
           isQueueVisible={isQueueVisible}
           onShowLyrics={() => setFocusView("lyrics")}
+          onEditLyrics={() => setFocusView("lyricsEdit")}
           onOpenArtistPage={openArtistPage}
         />
       </div>
