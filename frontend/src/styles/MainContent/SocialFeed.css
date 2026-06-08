@@ -278,13 +278,18 @@
   width: min(100%, 360px);
 }
 
-.composer-photo-preview img {
+.composer-photo-preview img,
+.composer-photo-preview video {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   display: block;
   max-height: 260px;
   object-fit: cover;
   width: 100%;
+}
+
+.composer-photo-preview video {
+  background: #000;
 }
 
 .composer-photo-preview button {
@@ -647,6 +652,10 @@
   max-height: 560px;
   object-fit: contain;
   width: 100%;
+}
+
+.post-video {
+  background: #000;
 }
 
 .social-track {

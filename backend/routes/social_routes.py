@@ -185,6 +185,8 @@ def serialize_message(db: Session, message: SocialMessage, current_user_id: str)
 
 
 def serialize_post(db: Session, post: SocialPost, current_user_id: str):
+    media_url = post.media_url or post.image_url
+    media_type = post.media_type or ("image" if post.image_url else None)
     author = db.query(User).filter(User.id == post.user_id).first()
     comments = (
         db.query(SocialComment, User)
@@ -209,6 +211,8 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
         "author": user_public(author),
         "track": track_public(db, post.track_id),
         "image_url": post.image_url,
+        "media_url": media_url,
+        "media_type": media_type,
         "shared_post_id": post.shared_post_id,
         "is_owner": post.user_id == current_user_id,
         "like_count": like_count,
@@ -275,6 +279,10 @@ async def save_social_story_media(media: UploadFile | None, request: Request):
     return str(request.base_url).rstrip("/") + f"/uploads/social/{file_name}", media_type
 
 
+async def save_social_media(media: UploadFile | None, request: Request):
+    return await save_social_story_media(media, request)
+
+
 @router.get("/feed")
 def get_feed(
     scope: str = Query("all", regex="^(all|following)$"),
@@ -327,24 +335,28 @@ async def create_photo_post(
     request: Request,
     content: str = Form(""),
     track_id: str | None = Form(None),
+    media: UploadFile | None = File(None),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_not_muted(current_user)
     post_content = content.strip()
-    if not post_content and not image:
-        raise HTTPException(status_code=400, detail="Post content or photo is required")
+    upload = media or image
+    if not post_content and not upload:
+        raise HTTPException(status_code=400, detail="Post content or media is required")
 
     if track_id and not db.query(Song).filter(Song.track_id == track_id).first():
         raise HTTPException(status_code=404, detail="Track not found")
 
-    image_url = await save_social_image(image, request)
+    media_url, media_type = await save_social_media(upload, request)
     post = SocialPost(
         user_id=current_user.id,
-        content=post_content or "Shared a photo",
+        content=post_content or ("Shared a video" if media_type == "video" else "Shared a photo"),
         track_id=track_id,
-        image_url=image_url,
+        image_url=media_url if media_type == "image" else None,
+        media_url=media_url,
+        media_type=media_type or "image",
     )
     db.add(post)
     db.flush()
@@ -487,6 +499,8 @@ def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db)
         content=(payload.content or f"Shared a post").strip(),
         track_id=original.track_id,
         image_url=original.image_url,
+        media_url=original.media_url,
+        media_type=original.media_type,
         shared_post_id=original.id,
     )
     db.add(share)

@@ -18,6 +18,8 @@ class SocialPost(Base):
     content = Column(Text, nullable=False)
     track_id = Column(String, nullable=True, index=True)
     image_url = Column(String, nullable=True)
+    media_url = Column(String, nullable=True)
+    media_type = Column(String, nullable=False, default="image")
     shared_post_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

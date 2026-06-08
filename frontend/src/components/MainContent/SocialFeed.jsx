@@ -64,8 +64,9 @@ const SocialFeed = () => {
   const [messageDraft, setMessageDraft] = useState("");
   const [content, setContent] = useState("");
   const [attachSong, setAttachSong] = useState(true);
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState("");
+  const [postMediaFile, setPostMediaFile] = useState(null);
+  const [postMediaPreview, setPostMediaPreview] = useState("");
+  const [postMediaType, setPostMediaType] = useState("");
   const [storyFile, setStoryFile] = useState(null);
   const [storyPreview, setStoryPreview] = useState("");
   const [storyMediaType, setStoryMediaType] = useState("");
@@ -192,15 +193,17 @@ const SocialFeed = () => {
   }, [fetchUsers]);
 
   useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreview("");
+    if (!postMediaFile) {
+      setPostMediaPreview("");
+      setPostMediaType("");
       return undefined;
     }
 
-    const previewUrl = URL.createObjectURL(photoFile);
-    setPhotoPreview(previewUrl);
+    const previewUrl = URL.createObjectURL(postMediaFile);
+    setPostMediaPreview(previewUrl);
+    setPostMediaType(postMediaFile.type.startsWith("video/") ? "video" : "image");
     return () => URL.revokeObjectURL(previewUrl);
-  }, [photoFile]);
+  }, [postMediaFile]);
 
   useEffect(() => {
     if (!storyFile) {
@@ -224,15 +227,15 @@ const SocialFeed = () => {
   };
 
   const createPost = async () => {
-    if (!content.trim() && !photoFile) return;
+    if (!content.trim() && !postMediaFile) return;
     const trackId = attachSong && currentSong?.id ? currentSong.id : null;
 
     try {
-      if (photoFile) {
+      if (postMediaFile) {
         const formData = new FormData();
         formData.append("content", content);
         if (trackId) formData.append("track_id", trackId);
-        formData.append("image", photoFile);
+        formData.append("media", postMediaFile);
 
         await authFetch(`${API_BASE}/api/social/posts/photo`, {
           method: "POST",
@@ -246,7 +249,7 @@ const SocialFeed = () => {
         });
       }
       setContent("");
-      setPhotoFile(null);
+      setPostMediaFile(null);
       refreshSocial();
     } catch (err) {
       console.error("Failed to create post", err);
@@ -284,8 +287,8 @@ const SocialFeed = () => {
 
   const handlePhotoChange = (event) => {
     const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-    setPhotoFile(file);
+    if (!file || (!file.type.startsWith("image/") && !file.type.startsWith("video/"))) return;
+    setPostMediaFile(file);
   };
 
   const handleStoryPhotoChange = (event) => {
@@ -792,16 +795,20 @@ const SocialFeed = () => {
               </label>
               <label className="composer-pill photo-picker">
                 <FaCamera />
-                Photo
-                <input type="file" accept="image/*" onChange={handlePhotoChange} />
+                Photo/video
+                <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={handlePhotoChange} />
               </label>
             </div>
-            <button className="composer-post-button" onClick={createPost} disabled={!content.trim() && !photoFile}>Post</button>
+            <button className="composer-post-button" onClick={createPost} disabled={!content.trim() && !postMediaFile}>Post</button>
           </div>
-          {photoPreview && (
+          {postMediaPreview && (
             <div className="composer-photo-preview">
-              <img src={photoPreview} alt="Selected upload preview" />
-              <button onClick={() => setPhotoFile(null)} title="Remove photo">
+              {postMediaType === "video" ? (
+                <video src={postMediaPreview} controls />
+              ) : (
+                <img src={postMediaPreview} alt="Selected upload preview" />
+              )}
+              <button onClick={() => setPostMediaFile(null)} title="Remove media">
                 <FaTimes />
               </button>
             </div>
@@ -850,7 +857,11 @@ const SocialFeed = () => {
               ) : (
                 <p className="post-content">{post.content}</p>
               )}
-              {post.image_url && <img className="post-photo" src={post.image_url} alt="Shared post" />}
+              {post.media_type === "video" && post.media_url ? (
+                <video className="post-photo post-video" src={post.media_url} controls />
+              ) : (post.media_url || post.image_url) && (
+                <img className="post-photo" src={post.media_url || post.image_url} alt="Shared post" />
+              )}
               {renderTrack(post.track)}
 
               <div className="post-actions">
@@ -1238,6 +1249,11 @@ const SocialFeed = () => {
                 </div>
               </div>
               <p>{shareDialogPost.content}</p>
+              {shareDialogPost.media_type === "video" && shareDialogPost.media_url ? (
+                <video className="post-photo post-video" src={shareDialogPost.media_url} controls />
+              ) : (shareDialogPost.media_url || shareDialogPost.image_url) && (
+                <img className="post-photo" src={shareDialogPost.media_url || shareDialogPost.image_url} alt="Shared post" />
+              )}
               {shareDialogPost.track && renderStaticTrack(shareDialogPost.track)}
             </div>
             <button className="share-dialog-submit" onClick={sharePost}>Share</button>
