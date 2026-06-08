@@ -51,10 +51,12 @@
   right: 14px;
 }
 
-.profile-cover-actions label,
+.edit-banner-button,
+.banner-editor-menu label,
 .profile-tool-actions label,
 .profile-tool-actions button,
-.story-type-row button {
+.story-type-row button,
+.profile-tabs button {
   align-items: center;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -68,9 +70,28 @@
   padding: 8px 12px;
 }
 
-.profile-cover-actions input[type="file"],
+.banner-editor-menu input[type="file"],
 .profile-tool-actions input {
   display: none;
+}
+
+.profile-cover-actions {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.banner-editor-menu {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 190px;
+  padding: 10px;
 }
 
 .profile-color-picker input {
@@ -162,6 +183,29 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 16px auto;
   max-width: 980px;
+}
+
+.profile-tools.single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-tabs {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  gap: 10px;
+  margin: 16px auto;
+  max-width: 980px;
+  padding: 12px;
+}
+
+.profile-tabs button.active {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
 }
 
 .profile-composer-card {

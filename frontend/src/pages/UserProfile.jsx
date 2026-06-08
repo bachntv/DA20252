@@ -29,6 +29,8 @@ const UserProfile = () => {
   const [storyMedia, setStoryMedia] = useState(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [messageStatus, setMessageStatus] = useState("");
+  const [isBannerEditorOpen, setIsBannerEditorOpen] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState("posts");
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -208,14 +210,21 @@ const UserProfile = () => {
         >
           {profile.is_self && (
             <div className="profile-cover-actions">
-              <label>
-                <FaPhotoVideo /> Cover
-                <input type="file" accept="image/*" onChange={handleCoverPhoto} />
-              </label>
-              <label className="profile-color-picker">
-                Color
-                <input type="color" value={profile.profile_background_color || "#1877f2"} onChange={handleCoverColor} />
-              </label>
+              <button className="edit-banner-button" onClick={() => setIsBannerEditorOpen((current) => !current)}>
+                <FaCamera /> Edit banner
+              </button>
+              {isBannerEditorOpen && (
+                <div className="banner-editor-menu">
+                  <label>
+                    <FaPhotoVideo /> Change photo
+                    <input type="file" accept="image/*" onChange={handleCoverPhoto} />
+                  </label>
+                  <label className="profile-color-picker">
+                    Change color
+                    <input type="color" value={profile.profile_background_color || "#1877f2"} onChange={handleCoverColor} />
+                  </label>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -239,15 +248,26 @@ const UserProfile = () => {
                 {profile.is_following ? <FaUserCheck /> : <FaUserPlus />}
                 {profile.is_following ? "Following" : "Follow"}
               </button>
-              <a className="profile-follow-button" href="#profile-message">
+              <button className="profile-follow-button" onClick={() => setActiveProfileTab("message")}>
                 <FaComment /> Message
-              </a>
+              </button>
             </div>
           )}
         </div>
       </section>
 
-      {profile.is_self ? (
+      <section className="profile-tabs">
+        <button className={activeProfileTab === "posts" ? "active" : ""} onClick={() => setActiveProfileTab("posts")}>Posts</button>
+        {profile.is_self ? (
+          <button className={activeProfileTab === "create" ? "active" : ""} onClick={() => setActiveProfileTab("create")}>Create</button>
+        ) : (
+          <button className={activeProfileTab === "message" ? "active" : ""} onClick={() => setActiveProfileTab("message")}>
+            <FaComment /> Message
+          </button>
+        )}
+      </section>
+
+      {profile.is_self && activeProfileTab === "create" && (
         <section className="profile-tools">
           <div className="profile-composer-card">
             <h2>Create post</h2>
@@ -270,8 +290,10 @@ const UserProfile = () => {
             </div>
           </div>
         </section>
-      ) : (
-        <section className="profile-tools" id="profile-message">
+      )}
+
+      {!profile.is_self && activeProfileTab === "message" && (
+        <section className="profile-tools single-column" id="profile-message">
           <div className="profile-composer-card">
             <h2>Message {profile.username}</h2>
             <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write a message" />
@@ -290,24 +312,26 @@ const UserProfile = () => {
         <div><strong>{profile.stats.friends}</strong><span>Friends</span></div>
       </section>
 
-      <section className="profile-posts">
-        <h2>Recent posts</h2>
-        {profile.recent_posts.length === 0 ? (
-          <p className="profile-empty">No posts yet.</p>
-        ) : (
-          profile.recent_posts.map((post) => (
-            <article className="profile-post-card" key={post.id}>
-              <p>{post.content}</p>
-              {post.media_type === "video" && post.media_url ? (
-                <video src={post.media_url} controls />
-              ) : (post.media_url || post.image_url) && (
-                <img src={post.media_url || post.image_url} alt="Profile post" />
-              )}
-              <span>{new Date(post.created_at).toLocaleString()}</span>
-            </article>
-          ))
-        )}
-      </section>
+      {activeProfileTab === "posts" && (
+        <section className="profile-posts">
+          <h2>Recent posts</h2>
+          {profile.recent_posts.length === 0 ? (
+            <p className="profile-empty">No posts yet.</p>
+          ) : (
+            profile.recent_posts.map((post) => (
+              <article className="profile-post-card" key={post.id}>
+                <p>{post.content}</p>
+                {post.media_type === "video" && post.media_url ? (
+                  <video src={post.media_url} controls />
+                ) : (post.media_url || post.image_url) && (
+                  <img src={post.media_url || post.image_url} alt="Profile post" />
+                )}
+                <span>{new Date(post.created_at).toLocaleString()}</span>
+              </article>
+            ))
+          )}
+        </section>
+      )}
     </div>
   );
 };
