@@ -94,13 +94,6 @@
   padding: 10px;
 }
 
-.profile-color-picker input {
-  border: 0;
-  height: 24px;
-  padding: 0;
-  width: 34px;
-}
-
 .profile-main-row {
   align-items: flex-end;
   display: flex;

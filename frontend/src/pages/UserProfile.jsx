@@ -101,21 +101,6 @@ const UserProfile = () => {
     }
   };
 
-  const handleCoverColor = async (event) => {
-    const color = event.target.value;
-    setProfile((current) => current ? { ...current, profile_background_color: color } : current);
-    try {
-      const res = await authFetch(`${API_BASE}/api/user/me/profile-theme`, {
-        method: "PUT",
-        body: JSON.stringify({ profile_background_color: color }),
-      });
-      const data = await res.json();
-      updateLocalUser(data.user);
-    } catch (err) {
-      console.error("Failed to update profile color", err);
-    }
-  };
-
   const createProfilePost = async () => {
     if (!postDraft.trim() && !postMedia) return;
 
@@ -204,7 +189,6 @@ const UserProfile = () => {
         <div
           className="profile-cover"
           style={{
-            backgroundColor: profile.profile_background_color || "#1877f2",
             backgroundImage: profile.cover_photo_url ? `url(${profile.cover_photo_url})` : undefined,
           }}
         >
@@ -218,10 +202,6 @@ const UserProfile = () => {
                   <label>
                     <FaPhotoVideo /> Change photo
                     <input type="file" accept="image/*" onChange={handleCoverPhoto} />
-                  </label>
-                  <label className="profile-color-picker">
-                    Change color
-                    <input type="color" value={profile.profile_background_color || "#1877f2"} onChange={handleCoverColor} />
                   </label>
                 </div>
               )}
