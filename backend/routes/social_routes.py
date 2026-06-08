@@ -11,12 +11,14 @@ from models.base import SessionLocal
 from models.notification_log import NotificationLog
 from models.song import Song
 from models.social import (
+    SocialBlock,
     SocialComment,
     SocialFollow,
     SocialFriendRequest,
     SocialFriendship,
     SocialLike,
     SocialMessage,
+    SocialMute,
     SocialPost,
     SocialShare,
     SocialStory,
@@ -115,6 +117,15 @@ def notify(db: Session, user_id: str | None, event_type: str, title: str, messag
 def require_not_muted(user: User):
     if user.is_muted:
         raise HTTPException(status_code=403, detail="This account is muted and cannot post, comment, or share")
+
+
+def is_blocked_between(db: Session, user_id: str, other_user_id: str):
+    return db.query(SocialBlock).filter(
+        or_(
+            and_(SocialBlock.blocker_id == user_id, SocialBlock.blocked_id == other_user_id),
+            and_(SocialBlock.blocker_id == other_user_id, SocialBlock.blocked_id == user_id),
+        )
+    ).first() is not None
 
 
 def friendship_state(db: Session, current_user_id: str, target_user_id: str):
@@ -715,6 +726,67 @@ def remove_friend(user_id: str, db: Session = Depends(get_db), current_user: Use
     return {"status": "removed", "user_id": user_id}
 
 
+@router.post("/users/{user_id}/block")
+def block_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing = db.query(SocialBlock).filter(
+        SocialBlock.blocker_id == current_user.id,
+        SocialBlock.blocked_id == user_id,
+    ).first()
+    if not existing:
+        db.add(SocialBlock(blocker_id=current_user.id, blocked_id=user_id))
+        db.query(SocialFriendship).filter(
+            or_(
+                and_(SocialFriendship.user_id == current_user.id, SocialFriendship.friend_id == user_id),
+                and_(SocialFriendship.user_id == user_id, SocialFriendship.friend_id == current_user.id),
+            )
+        ).delete(synchronize_session=False)
+        db.query(SocialFollow).filter(
+            or_(
+                and_(SocialFollow.follower_id == current_user.id, SocialFollow.following_id == user_id),
+                and_(SocialFollow.follower_id == user_id, SocialFollow.following_id == current_user.id),
+            )
+        ).delete(synchronize_session=False)
+        db.commit()
+    return {"status": "blocked", "user_id": user_id}
+
+
+@router.delete("/users/{user_id}/block")
+def unblock_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db.query(SocialBlock).filter(
+        SocialBlock.blocker_id == current_user.id,
+        SocialBlock.blocked_id == user_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "unblocked", "user_id": user_id}
+
+
+@router.post("/users/{user_id}/mute")
+def mute_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot mute yourself")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    existing = db.query(SocialMute).filter(SocialMute.muter_id == current_user.id, SocialMute.muted_id == user_id).first()
+    if not existing:
+        db.add(SocialMute(muter_id=current_user.id, muted_id=user_id))
+        db.commit()
+    return {"status": "muted", "user_id": user_id}
+
+
+@router.delete("/users/{user_id}/mute")
+def unmute_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db.query(SocialMute).filter(SocialMute.muter_id == current_user.id, SocialMute.muted_id == user_id).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "unmuted", "user_id": user_id}
+
+
 @router.get("/messages/threads")
 def get_message_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = (
@@ -727,6 +799,8 @@ def get_message_threads(db: Session = Depends(get_db), current_user: User = Depe
     threads = {}
     for message in rows:
         partner_id = message.recipient_id if message.sender_id == current_user.id else message.sender_id
+        if is_blocked_between(db, current_user.id, partner_id):
+            continue
         if partner_id not in threads:
             threads[partner_id] = {
                 "user": user_summary(db, partner_id),
@@ -744,6 +818,8 @@ def get_messages(user_id: str, db: Session = Depends(get_db), current_user: User
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if is_blocked_between(db, current_user.id, user_id):
+        raise HTTPException(status_code=403, detail="Messages are unavailable for this profile")
 
     messages = (
         db.query(SocialMessage)
@@ -774,6 +850,10 @@ def send_message(user_id: str, payload: MessageCreate, db: Session = Depends(get
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+    if is_blocked_between(db, current_user.id, user_id):
+        raise HTTPException(status_code=403, detail="Messages are unavailable for this profile")
 
     content = payload.content.strip()
     if not content:

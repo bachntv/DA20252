@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaArrowLeft, FaCamera, FaComment, FaPaperPlane, FaPhotoVideo, FaPlus, FaUserCheck, FaUserPlus } from "react-icons/fa";
-import { useNavigate, useParams } from "react-router-dom";
+import { FaArrowLeft, FaBan, FaCamera, FaComment, FaPaperPlane, FaPhotoVideo, FaPlus, FaUserCheck, FaUserPlus, FaVolumeMute } from "react-icons/fa";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import "../styles/UserProfile.css";
 
@@ -18,6 +18,7 @@ const UserAvatar = ({ user, className = "" }) => (
 
 const UserProfile = () => {
   const { userId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,8 +30,11 @@ const UserProfile = () => {
   const [storyMedia, setStoryMedia] = useState(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [messageStatus, setMessageStatus] = useState("");
+  const [threads, setThreads] = useState([]);
+  const [conversation, setConversation] = useState([]);
+  const [activeMessageUser, setActiveMessageUser] = useState(null);
   const [isBannerEditorOpen, setIsBannerEditorOpen] = useState(false);
-  const [activeProfileTab, setActiveProfileTab] = useState("posts");
+  const [activeProfileTab, setActiveProfileTab] = useState(() => new URLSearchParams(location.search).get("tab") || "posts");
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -48,6 +52,35 @@ const UserProfile = () => {
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    const fetchThreads = async () => {
+      if (!profile?.is_self) return;
+      try {
+        const res = await authFetch(`${API_BASE}/api/social/messages/threads`);
+        const data = await res.json();
+        setThreads(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load message threads", err);
+      }
+    };
+
+    fetchThreads();
+  }, [profile?.is_self]);
+
+  const openConversation = async (messageUser) => {
+    if (!messageUser?.id) return;
+    setActiveMessageUser(messageUser);
+    setActiveProfileTab("message");
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/messages/${messageUser.id}`);
+      const data = await res.json();
+      setConversation(data.messages || []);
+    } catch (err) {
+      console.error("Failed to open conversation", err);
+      setConversation([]);
+    }
+  };
 
   const handleProfilePicture = async (event) => {
     const file = event.target.files?.[0];
@@ -142,20 +175,48 @@ const UserProfile = () => {
   };
 
   const sendProfileMessage = async () => {
+    const targetUser = profile?.is_self ? activeMessageUser : profile;
     const value = messageDraft.trim();
-    if (!value || !profile || profile.is_self) return;
+    if (!value || !targetUser?.id) return;
 
     try {
-      await authFetch(`${API_BASE}/api/social/messages/${profile.id}`, {
+      const res = await authFetch(`${API_BASE}/api/social/messages/${targetUser.id}`, {
         method: "POST",
         body: JSON.stringify({ content: value }),
       });
+      const message = await res.json();
+      setConversation((current) => [...current, message]);
       setMessageDraft("");
       setMessageStatus("Sent");
       window.setTimeout(() => setMessageStatus(""), 1600);
     } catch (err) {
       console.error("Failed to send message", err);
       setMessageStatus("Try again");
+    }
+  };
+
+  const toggleMute = async () => {
+    if (!profile || profile.is_self) return;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${profile.id}/mute`, {
+        method: profile.is_muted ? "DELETE" : "POST",
+      });
+      fetchProfile();
+    } catch (err) {
+      console.error("Failed to update mute state", err);
+    }
+  };
+
+  const toggleBlock = async () => {
+    if (!profile || profile.is_self) return;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${profile.id}/block`, {
+        method: profile.is_blocked ? "DELETE" : "POST",
+      });
+      setConversation([]);
+      fetchProfile();
+    } catch (err) {
+      console.error("Failed to update block state", err);
     }
   };
 
@@ -231,6 +292,12 @@ const UserProfile = () => {
               <button className="profile-follow-button" onClick={() => setActiveProfileTab("message")}>
                 <FaComment /> Message
               </button>
+              <button className="profile-follow-button" onClick={toggleMute}>
+                <FaVolumeMute /> {profile.is_muted ? "Unmute" : "Mute"}
+              </button>
+              <button className="profile-follow-button danger" onClick={toggleBlock}>
+                <FaBan /> {profile.is_blocked ? "Unblock" : "Block"}
+              </button>
             </div>
           )}
         </div>
@@ -238,8 +305,14 @@ const UserProfile = () => {
 
       <section className="profile-tabs">
         <button className={activeProfileTab === "posts" ? "active" : ""} onClick={() => setActiveProfileTab("posts")}>Posts</button>
+        <button className={activeProfileTab === "playlists" ? "active" : ""} onClick={() => setActiveProfileTab("playlists")}>Playlists</button>
         {profile.is_self ? (
-          <button className={activeProfileTab === "create" ? "active" : ""} onClick={() => setActiveProfileTab("create")}>Create</button>
+          <>
+            <button className={activeProfileTab === "create" ? "active" : ""} onClick={() => setActiveProfileTab("create")}>Create</button>
+            <button className={activeProfileTab === "message" ? "active" : ""} onClick={() => setActiveProfileTab("message")}>
+              <FaComment /> Messages
+            </button>
+          </>
         ) : (
           <button className={activeProfileTab === "message" ? "active" : ""} onClick={() => setActiveProfileTab("message")}>
             <FaComment /> Message
@@ -276,17 +349,85 @@ const UserProfile = () => {
         <section className="profile-tools single-column" id="profile-message">
           <div className="profile-composer-card">
             <h2>Message {profile.username}</h2>
-            <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write a message" />
-            <div className="profile-tool-actions">
-              <span>{messageStatus}</span>
-              <button onClick={sendProfileMessage}><FaPaperPlane /> Send</button>
-            </div>
+            {profile.is_blocked || profile.has_blocked_you ? (
+              <p className="profile-empty">Messages are unavailable for this profile.</p>
+            ) : (
+              <>
+                <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write a message" />
+                <div className="profile-tool-actions">
+                  <span>{messageStatus}</span>
+                  <button onClick={sendProfileMessage}><FaPaperPlane /> Send</button>
+                </div>
+              </>
+            )}
           </div>
+        </section>
+      )}
+
+      {profile.is_self && activeProfileTab === "message" && (
+        <section className="profile-message-layout">
+          <div className="profile-message-list">
+            <h2>Messages</h2>
+            {threads.length === 0 ? (
+              <p className="profile-empty">No messages yet.</p>
+            ) : (
+              threads.map((thread) => (
+                <button key={thread.user.id} onClick={() => openConversation(thread.user)} className={activeMessageUser?.id === thread.user.id ? "active" : ""}>
+                  <UserAvatar user={thread.user} className="thread-profile-avatar" />
+                  <div>
+                    <strong>{thread.user.username}</strong>
+                    <span>{thread.latest_message.content}</span>
+                  </div>
+                  {thread.unread_count > 0 && <b>{thread.unread_count}</b>}
+                </button>
+              ))
+            )}
+          </div>
+          <div className="profile-message-pane">
+            {activeMessageUser ? (
+              <>
+                <h2>{activeMessageUser.username}</h2>
+                <div className="profile-conversation">
+                  {conversation.map((message) => (
+                    <div className={`profile-message-bubble ${message.is_mine ? "mine" : ""}`} key={message.id}>
+                      {message.content}
+                    </div>
+                  ))}
+                </div>
+                <div className="profile-message-input">
+                  <input value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write a message" />
+                  <button onClick={sendProfileMessage}><FaPaperPlane /></button>
+                </div>
+              </>
+            ) : (
+              <p className="profile-empty">Select a conversation.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeProfileTab === "playlists" && (
+        <section className="profile-playlists">
+          <h2>Playlists</h2>
+          {profile.playlists.length === 0 ? (
+            <p className="profile-empty">No playlists yet.</p>
+          ) : (
+            <div className="profile-playlist-grid">
+              {profile.playlists.map((playlist) => (
+                <article className="profile-playlist-card" key={playlist.id}>
+                  {playlist.cover_image_url ? <img src={playlist.cover_image_url} alt={playlist.name} /> : <div>{playlist.name[0]?.toUpperCase()}</div>}
+                  <strong>{playlist.name}</strong>
+                  <span>{playlist.track_count} songs</span>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       <section className="profile-stats">
         <div><strong>{profile.stats.posts}</strong><span>Posts</span></div>
+        <div><strong>{profile.stats.owned_songs}</strong><span>Songs owned</span></div>
         <div><strong>{profile.stats.followers}</strong><span>Followers</span></div>
         <div><strong>{profile.stats.following}</strong><span>Following</span></div>
         <div><strong>{profile.stats.friends}</strong><span>Friends</span></div>

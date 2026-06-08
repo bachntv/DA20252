@@ -269,6 +269,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
               <>
                 <div className="account-name">{username}</div>
                 {userId && <button className="button" onClick={() => navigate(`/profile/${userId}`)}>Profile</button>}
+                {userId && <button className="button" onClick={() => navigate(`/profile/${userId}?tab=message`)}>Messages</button>}
                 <button className="button" onClick={() => navigate("/setting")}>Setting</button>
                 {roles.includes("artist") && (
                   <button className="button" onClick={() => navigate("/artist-studio")}>

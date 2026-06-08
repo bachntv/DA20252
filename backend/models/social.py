@@ -97,6 +97,26 @@ class SocialMessage(Base):
     read_at = Column(DateTime, nullable=True)
 
 
+class SocialBlock(Base):
+    __tablename__ = "social_blocks"
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id", name="uq_social_block_pair"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    blocker_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    blocked_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SocialMute(Base):
+    __tablename__ = "social_mutes"
+    __table_args__ = (UniqueConstraint("muter_id", "muted_id", name="uq_social_mute_pair"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    muter_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    muted_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SocialStory(Base):
     __tablename__ = "social_stories"
 

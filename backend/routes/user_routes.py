@@ -11,6 +11,10 @@ from pydantic import BaseModel
 from models.base import SessionLocal
 from models.user import User
 from models.plan import Plan
+from models.playlist import Playlist
+from models.playlist_tracks import PlaylistTracks
+from models.playlist_user import PlaylistUser
+from models.song_purchase import SongPurchase
 from schemas.user import UserUpdate
 from schemas.billing import BillingOverview, PlanResponse, SubscriptionSummary, PaymentResponse, SubscribeRequest, PaymentActionRequest
 from .auth_routes import get_current_user
@@ -194,16 +198,29 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from models.social import SocialFollow, SocialFriendship, SocialPost
+    from models.social import SocialBlock, SocialFollow, SocialFriendship, SocialMute, SocialPost
 
     post_count = db.query(SocialPost).filter(SocialPost.user_id == user.id).count()
     follower_count = db.query(SocialFollow).filter(SocialFollow.following_id == user.id).count()
     following_count = db.query(SocialFollow).filter(SocialFollow.follower_id == user.id).count()
     friend_count = db.query(SocialFriendship).filter(SocialFriendship.user_id == user.id).count()
+    owned_song_count = db.query(SongPurchase).filter(SongPurchase.user_id == user.id, SongPurchase.status == "owned").count()
     is_following = db.query(SocialFollow).filter(
         SocialFollow.follower_id == current_user.id,
         SocialFollow.following_id == user.id,
     ).first() is not None
+    is_muted = db.query(SocialMute).filter(SocialMute.muter_id == current_user.id, SocialMute.muted_id == user.id).first() is not None
+    is_blocked = db.query(SocialBlock).filter(SocialBlock.blocker_id == current_user.id, SocialBlock.blocked_id == user.id).first() is not None
+    has_blocked_you = db.query(SocialBlock).filter(SocialBlock.blocker_id == user.id, SocialBlock.blocked_id == current_user.id).first() is not None
+
+    playlist_rows = (
+        db.query(PlaylistUser, Playlist)
+        .join(Playlist, Playlist.id == PlaylistUser.playlist_id)
+        .filter(PlaylistUser.user_id == user.id, PlaylistUser.type == "playlist")
+        .order_by(PlaylistUser.created_at.desc())
+        .limit(12)
+        .all()
+    )
 
     recent_posts = (
         db.query(SocialPost)
@@ -228,7 +245,22 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
             "followers": follower_count,
             "following": following_count,
             "friends": friend_count,
+            "owned_songs": owned_song_count,
         },
+        "is_muted": is_muted,
+        "is_blocked": is_blocked,
+        "has_blocked_you": has_blocked_you,
+        "playlists": [
+            {
+                "id": playlist.id,
+                "name": playlist.name,
+                "description": playlist.description,
+                "cover_image_url": playlist.cover_image_url,
+                "created_at": link.created_at.isoformat() if link.created_at else None,
+                "track_count": db.query(PlaylistTracks).filter(PlaylistTracks.playlist_id == playlist.id).count(),
+            }
+            for link, playlist in playlist_rows
+        ],
         "recent_posts": [
             {
                 "id": post.id,

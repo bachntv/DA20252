@@ -19,11 +19,13 @@ from models.payment import Payment
 from models.notification_log import NotificationLog
 from models.social import (
     SocialComment,
+    SocialBlock,
     SocialFollow,
     SocialFriendRequest,
     SocialFriendship,
     SocialLike,
     SocialMessage,
+    SocialMute,
     SocialPost,
     SocialShare,
     SocialStory,
