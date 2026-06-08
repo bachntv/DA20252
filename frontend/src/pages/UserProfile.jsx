@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaArrowLeft, FaCamera, FaUserCheck, FaUserPlus } from "react-icons/fa";
+import { FaArrowLeft, FaCamera, FaComment, FaPaperPlane, FaPhotoVideo, FaPlus, FaUserCheck, FaUserPlus } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import "../styles/UserProfile.css";
@@ -22,6 +22,13 @@ const UserProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [postDraft, setPostDraft] = useState("");
+  const [postMedia, setPostMedia] = useState(null);
+  const [storyDraft, setStoryDraft] = useState("");
+  const [storyType, setStoryType] = useState("story");
+  const [storyMedia, setStoryMedia] = useState(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [messageStatus, setMessageStatus] = useState("");
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -64,6 +71,107 @@ const UserProfile = () => {
     }
   };
 
+  const updateLocalUser = (user) => {
+    if (user) {
+      localStorage.setItem("user", JSON.stringify(user));
+      window.dispatchEvent(new Event("profileUpdated"));
+    }
+  };
+
+  const handleCoverPhoto = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await authFetch(`${API_BASE}/api/user/me/cover-photo`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      updateLocalUser(data.user);
+      setProfile((current) => current ? { ...current, cover_photo_url: data.cover_photo_url } : current);
+    } catch (err) {
+      console.error("Failed to update cover photo", err);
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleCoverColor = async (event) => {
+    const color = event.target.value;
+    setProfile((current) => current ? { ...current, profile_background_color: color } : current);
+    try {
+      const res = await authFetch(`${API_BASE}/api/user/me/profile-theme`, {
+        method: "PUT",
+        body: JSON.stringify({ profile_background_color: color }),
+      });
+      const data = await res.json();
+      updateLocalUser(data.user);
+    } catch (err) {
+      console.error("Failed to update profile color", err);
+    }
+  };
+
+  const createProfilePost = async () => {
+    if (!postDraft.trim() && !postMedia) return;
+
+    try {
+      if (postMedia) {
+        const formData = new FormData();
+        formData.append("content", postDraft);
+        formData.append("media", postMedia);
+        await authFetch(`${API_BASE}/api/social/posts/photo`, { method: "POST", body: formData });
+      } else {
+        await authFetch(`${API_BASE}/api/social/posts`, {
+          method: "POST",
+          body: JSON.stringify({ content: postDraft }),
+        });
+      }
+      setPostDraft("");
+      setPostMedia(null);
+      fetchProfile();
+    } catch (err) {
+      console.error("Failed to post from profile", err);
+    }
+  };
+
+  const createProfileStory = async () => {
+    if (!storyDraft.trim() && !storyMedia) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("content", storyDraft);
+      formData.append("story_type", storyType);
+      if (storyMedia) formData.append("media", storyMedia);
+      await authFetch(`${API_BASE}/api/social/stories/photo`, { method: "POST", body: formData });
+      setStoryDraft("");
+      setStoryMedia(null);
+      setStoryType("story");
+    } catch (err) {
+      console.error("Failed to create story from profile", err);
+    }
+  };
+
+  const sendProfileMessage = async () => {
+    const value = messageDraft.trim();
+    if (!value || !profile || profile.is_self) return;
+
+    try {
+      await authFetch(`${API_BASE}/api/social/messages/${profile.id}`, {
+        method: "POST",
+        body: JSON.stringify({ content: value }),
+      });
+      setMessageDraft("");
+      setMessageStatus("Sent");
+      window.setTimeout(() => setMessageStatus(""), 1600);
+    } catch (err) {
+      console.error("Failed to send message", err);
+      setMessageStatus("Try again");
+    }
+  };
+
   const toggleFollow = async () => {
     if (!profile || profile.is_self) return;
     try {
@@ -91,7 +199,26 @@ const UserProfile = () => {
       </button>
 
       <section className="profile-hero">
-        <div className="profile-cover" />
+        <div
+          className="profile-cover"
+          style={{
+            backgroundColor: profile.profile_background_color || "#1877f2",
+            backgroundImage: profile.cover_photo_url ? `url(${profile.cover_photo_url})` : undefined,
+          }}
+        >
+          {profile.is_self && (
+            <div className="profile-cover-actions">
+              <label>
+                <FaPhotoVideo /> Cover
+                <input type="file" accept="image/*" onChange={handleCoverPhoto} />
+              </label>
+              <label className="profile-color-picker">
+                Color
+                <input type="color" value={profile.profile_background_color || "#1877f2"} onChange={handleCoverColor} />
+              </label>
+            </div>
+          )}
+        </div>
         <div className="profile-main-row">
           <div className="profile-avatar-wrap">
             <UserAvatar user={profile} />
@@ -107,13 +234,54 @@ const UserProfile = () => {
             <p>{profile.roles?.includes("artist") ? "Artist account" : "Music listener"}</p>
           </div>
           {!profile.is_self && (
-            <button className="profile-follow-button" onClick={toggleFollow}>
-              {profile.is_following ? <FaUserCheck /> : <FaUserPlus />}
-              {profile.is_following ? "Following" : "Follow"}
-            </button>
+            <div className="profile-action-row">
+              <button className="profile-follow-button" onClick={toggleFollow}>
+                {profile.is_following ? <FaUserCheck /> : <FaUserPlus />}
+                {profile.is_following ? "Following" : "Follow"}
+              </button>
+              <a className="profile-follow-button" href="#profile-message">
+                <FaComment /> Message
+              </a>
+            </div>
           )}
         </div>
       </section>
+
+      {profile.is_self ? (
+        <section className="profile-tools">
+          <div className="profile-composer-card">
+            <h2>Create post</h2>
+            <textarea value={postDraft} onChange={(event) => setPostDraft(event.target.value)} placeholder="What's on your mind?" />
+            <div className="profile-tool-actions">
+              <label><FaPhotoVideo /> Photo/video<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => setPostMedia(event.target.files?.[0] || null)} /></label>
+              <button onClick={createProfilePost}><FaPaperPlane /> Post</button>
+            </div>
+          </div>
+          <div className="profile-composer-card">
+            <h2>Create story or reel</h2>
+            <textarea value={storyDraft} onChange={(event) => setStoryDraft(event.target.value)} placeholder="Share a story or reel" />
+            <div className="story-type-row">
+              <button className={storyType === "story" ? "active" : ""} onClick={() => setStoryType("story")}>Story</button>
+              <button className={storyType === "reel" ? "active" : ""} onClick={() => setStoryType("reel")}>Reel</button>
+            </div>
+            <div className="profile-tool-actions">
+              <label><FaPlus /> Media<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => setStoryMedia(event.target.files?.[0] || null)} /></label>
+              <button onClick={createProfileStory}><FaPaperPlane /> Share</button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="profile-tools" id="profile-message">
+          <div className="profile-composer-card">
+            <h2>Message {profile.username}</h2>
+            <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write a message" />
+            <div className="profile-tool-actions">
+              <span>{messageStatus}</span>
+              <button onClick={sendProfileMessage}><FaPaperPlane /> Send</button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="profile-stats">
         <div><strong>{profile.stats.posts}</strong><span>Posts</span></div>

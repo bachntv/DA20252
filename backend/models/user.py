@@ -17,5 +17,7 @@ class User(Base):
     roles = Column(String, nullable=False, default="user")
     account_type = Column(String, nullable=False, default="free")
     profile_picture_url = Column(String, nullable=True)
+    cover_photo_url = Column(String, nullable=True)
+    profile_background_color = Column(String, nullable=False, default="#1877f2")
     is_active = Column(Boolean, nullable=False, default=True)
     is_muted = Column(Boolean, nullable=False, default=False)

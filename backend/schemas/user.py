@@ -18,6 +18,8 @@ class UserResponse(BaseModel):
     gender: Optional[str]
     account_type: Optional[str] = "free"
     profile_picture_url: Optional[str] = None
+    cover_photo_url: Optional[str] = None
+    profile_background_color: Optional[str] = "#1877f2"
 
     class Config:
         orm_mode = True
@@ -33,3 +35,5 @@ class UserUpdate(BaseModel):
     gender: Optional[str]
     account_type: Optional[str] = None
     profile_picture_url: Optional[str] = None
+    cover_photo_url: Optional[str] = None
+    profile_background_color: Optional[str] = None

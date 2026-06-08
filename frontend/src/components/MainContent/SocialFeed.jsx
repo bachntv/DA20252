@@ -945,6 +945,16 @@ const SocialFeed = () => {
       </main>
 
       <aside className="social-right-rail">
+        <section className="side-panel social-profile-panel">
+          <button className="social-profile-card" onClick={(event) => openUserProfile(user, event)} type="button">
+            {renderUserAvatar(user, "social-profile-avatar")}
+            <div>
+              <strong>{username}</strong>
+              <span>View your profile</span>
+            </div>
+          </button>
+        </section>
+
         <section className="side-panel">
           <div className="panel-title">
             <h3>Friend Requests</h3>

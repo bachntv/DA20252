@@ -47,6 +47,10 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class ProfileThemeUpdate(BaseModel):
+    profile_background_color: str
+
+
 async def save_profile_picture(image: UploadFile, request: Request):
     extension = ALLOWED_PROFILE_IMAGE_TYPES.get(image.content_type)
     if not image or not image.filename or not extension:
@@ -64,6 +68,19 @@ async def save_profile_picture(image: UploadFile, request: Request):
 
     return str(request.base_url).rstrip("/") + f"/uploads/profiles/{file_name}"
 
+
+def serialize_private_user(user: User):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "roles": user.roles,
+        "account_type": user.account_type,
+        "profile_picture_url": user.profile_picture_url,
+        "cover_photo_url": user.cover_photo_url,
+        "profile_background_color": user.profile_background_color,
+    }
+
 # Get current user profile
 @router.get("/me", response_model=UserUpdate)
 def get_my_profile(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -78,6 +95,8 @@ def get_my_profile(db: Session = Depends(get_db), current_user: User = Depends(g
         "gender": current_user.gender,
         "account_type": current_user.account_type,
         "profile_picture_url": current_user.profile_picture_url,
+        "cover_photo_url": current_user.cover_photo_url,
+        "profile_background_color": current_user.profile_background_color,
     }
 
 # Update current user profile
@@ -117,14 +136,55 @@ async def update_profile_picture(
     return {
         "message": "Profile picture updated",
         "profile_picture_url": user.profile_picture_url,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "roles": user.roles,
-            "account_type": user.account_type,
-            "profile_picture_url": user.profile_picture_url,
-        },
+        "user": serialize_private_user(user),
+    }
+
+
+@router.post("/me/cover-photo")
+async def update_cover_photo(
+    request: Request,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    image_url = await save_profile_picture(image, request)
+    user.cover_photo_url = image_url
+    db.commit()
+    db.refresh(user)
+    log_activity(db, user.id, "update_cover_photo", "user", user.id, "Updated profile cover photo")
+    return {
+        "message": "Cover photo updated",
+        "cover_photo_url": user.cover_photo_url,
+        "user": serialize_private_user(user),
+    }
+
+
+@router.put("/me/profile-theme")
+def update_profile_theme(
+    payload: ProfileThemeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+      raise HTTPException(status_code=404, detail="User not found")
+
+    color = (payload.profile_background_color or "").strip()
+    if not color.startswith("#") or len(color) not in {4, 7}:
+        raise HTTPException(status_code=400, detail="Use a hex color like #1877f2")
+
+    user.profile_background_color = color
+    db.commit()
+    db.refresh(user)
+    log_activity(db, user.id, "update_profile_theme", "user", user.id, "Updated profile background color")
+    return {
+        "message": "Profile color updated",
+        "profile_background_color": user.profile_background_color,
+        "user": serialize_private_user(user),
     }
 
 
@@ -159,6 +219,8 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
         "roles": user.roles,
         "account_type": user.account_type,
         "profile_picture_url": user.profile_picture_url,
+        "cover_photo_url": user.cover_photo_url,
+        "profile_background_color": user.profile_background_color,
         "is_self": user.id == current_user.id,
         "is_following": is_following,
         "stats": {

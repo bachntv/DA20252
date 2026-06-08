@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import "../styles/RightContent.css";
 import { usePlayer } from "../context/PlayerContext";
-import { FaShareAlt, FaTimes, FaUserCircle } from "react-icons/fa";
+import { FaShareAlt, FaTimes } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
-import { useNavigate } from "react-router-dom";
 import { authFetch } from '../utils/authFetch';
 import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
 
@@ -20,7 +19,6 @@ const getPrimaryArtistId = (song) => {
 };
 
 const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics, onOpenArtistPage }) => {
-  const navigate = useNavigate();
   const [relatedSongs, setRelatedSongs] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -31,35 +29,12 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics,
   const roles = token ? jwtDecode(token)?.roles || [] : [];
   const canEditLyrics = roles.includes("artist");
   const { playSong, queue, setQueue, isPlaying, removeFromQueue } = usePlayer();
-  const [storedUser, setStoredUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch (err) {
-      return {};
-    }
-  });
   const [lyrics, setLyrics] = useState("");
   const [artistInfo, setArtistInfo] = useState(null);
   const [isArtistFollowed, setIsArtistFollowed] = useState(false);
   const [purchaseState, setPurchaseState] = useState({ owned: false, amount: 15000, currency: "VND" });
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [shareState, setShareState] = useState("idle");
-
-  useEffect(() => {
-    const syncProfile = () => {
-      try {
-        setStoredUser(JSON.parse(localStorage.getItem("user") || "{}"));
-      } catch (err) {
-        setStoredUser({});
-      }
-    };
-    window.addEventListener("profileUpdated", syncProfile);
-    window.addEventListener("storage", syncProfile);
-    return () => {
-      window.removeEventListener("profileUpdated", syncProfile);
-      window.removeEventListener("storage", syncProfile);
-    };
-  }, []);
 
   const fetchMp3Url = async (trackName) => {
     try {
@@ -329,44 +304,11 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics,
     }
   };
 
-  const openOwnProfile = () => {
-    const profileId = storedUser?.id || userId;
-    if (profileId) navigate(`/profile/${profileId}`);
-  };
-
-  const renderProfileShortcut = () => {
-    if (!userId) return null;
-    const displayName = storedUser?.username || "Your profile";
-    return (
-      <button className="right-profile-shortcut" onClick={openOwnProfile} type="button">
-        {storedUser?.profile_picture_url ? (
-          <img src={storedUser.profile_picture_url} alt={displayName} />
-        ) : (
-          <span className="right-profile-fallback">{displayName[0]?.toUpperCase() || <FaUserCircle />}</span>
-        )}
-        <div>
-          <strong>{displayName}</strong>
-          <span>View your profile</span>
-        </div>
-      </button>
-    );
-  };
-
-  if (!currentSong) {
-    return (
-      <aside className="right-content-cover profile-only-view">
-        <div className="overlay-content">
-          {renderProfileShortcut()}
-          <p className="right-panel-empty">Play a song to see lyrics, artist info, and related music here.</p>
-        </div>
-      </aside>
-    );
-  }
+  if (!currentSong) return null;
 
   const renderQueueList = () => (
     <div className="right-content-cover queue-view">
       <div className="overlay-content">
-        {renderProfileShortcut()}
         <h4>Queue</h4>
         {queue.length > 0 ? (
           queue.slice(0, 10).map((track, index) => (
@@ -417,7 +359,6 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics,
         onError={(e) => { e.target.onerror = null; e.target.src = createTrackArtwork(currentSong); }}
       />
       <div className="overlay-content">
-        {renderProfileShortcut()}
         <h1 className="song-title">{currentSong.track_name || currentSong.title}</h1>
         <p className="song-artist">{currentSong.artist_name || currentSong.artist}</p>
         <div className="song-actions">

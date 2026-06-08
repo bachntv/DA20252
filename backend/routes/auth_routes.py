@@ -217,6 +217,8 @@ def signin(credentials: UserLogin, response: Response, db: Session = Depends(get
             "roles": user.roles,
             "account_type": user.account_type,
             "profile_picture_url": user.profile_picture_url,
+            "cover_photo_url": user.cover_photo_url,
+            "profile_background_color": user.profile_background_color,
         },
     }
 
@@ -262,6 +264,8 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
             "roles": user.roles,
             "account_type": user.account_type,
             "profile_picture_url": user.profile_picture_url,
+            "cover_photo_url": user.cover_photo_url,
+            "profile_background_color": user.profile_background_color,
         },
     }
 
