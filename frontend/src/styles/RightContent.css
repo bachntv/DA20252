@@ -52,6 +52,68 @@
   border-radius: var(--radius-lg);
 }
 
+.right-profile-shortcut {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 10px;
+  text-align: left;
+  transition: all var(--transition-fast);
+  width: 100%;
+}
+
+.right-profile-shortcut:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.right-profile-shortcut img,
+.right-profile-fallback {
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 48px;
+  object-fit: cover;
+  width: 48px;
+}
+
+.right-profile-fallback {
+  align-items: center;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: var(--text-on-accent);
+  display: flex;
+  font-size: 18px;
+  font-weight: 900;
+  justify-content: center;
+}
+
+.right-profile-shortcut strong,
+.right-profile-shortcut span {
+  display: block;
+}
+
+.right-profile-shortcut span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.right-panel-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.profile-only-view {
+  min-height: 180px;
+}
+
 .song-title {
   font-size: 18px;
   font-weight: 600;
