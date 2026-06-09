@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/Navbar.css";
 import {
   FaBell,
+  FaBan,
   FaChevronDown,
   FaCog,
   FaCommentDots,
@@ -13,6 +14,7 @@ import {
   FaPen,
   FaSearch,
   FaTimes,
+  FaVolumeUp,
   FaUsers,
 } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -34,10 +36,16 @@ const Navbar = ({ username, profilePicture, userId }) => {
   const [chatSearch, setChatSearch] = useState("");
   const [peopleSearch, setPeopleSearch] = useState("");
   const [threads, setThreads] = useState([]);
+  const [friends, setFriends] = useState([]);
   const [people, setPeople] = useState([]);
   const [activeChatUser, setActiveChatUser] = useState(null);
   const [conversation, setConversation] = useState([]);
   const [chatDraft, setChatDraft] = useState("");
+  const [chatPrefs, setChatPrefs] = useState({
+    messageSounds: true,
+    popupMessages: true,
+    activeStatus: true,
+  });
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchType, setSearchType] = useState("Track");
   const [searchTerm, setSearchTerm] = useState("");
@@ -181,13 +189,29 @@ const Navbar = ({ username, profilePicture, userId }) => {
     }
   }, [isAuthenticated, peopleSearch]);
 
+  const fetchFriends = useCallback(async () => {
+    if (!isAuthenticated) {
+      setFriends([]);
+      return;
+    }
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/friends`);
+      const data = await res.json();
+      setFriends(Array.isArray(data.friends) ? data.friends : []);
+    } catch (err) {
+      console.error("Failed to fetch chat friends", err);
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchNotifications();
     fetchThreads();
+    fetchFriends();
     const timer = setInterval(fetchNotifications, 60000);
     return () => clearInterval(timer);
-  }, [fetchNotifications, fetchThreads, isAuthenticated]);
+  }, [fetchFriends, fetchNotifications, fetchThreads, isAuthenticated]);
 
   useEffect(() => {
     if (!showNewMessage) return;
@@ -224,7 +248,10 @@ const Navbar = ({ username, profilePicture, userId }) => {
     setShowMenu(false);
     setShowChatSettings(false);
     setShowNewMessage(false);
-    if (next) await fetchThreads();
+    if (next) {
+      await fetchThreads();
+      await fetchFriends();
+    }
   };
 
   const openConversation = async (targetUser) => {
@@ -274,11 +301,20 @@ const Navbar = ({ username, profilePicture, userId }) => {
 
   const isSocialActive = location.pathname.startsWith("/social");
   const isHomeActive = location.pathname === "/" || ["/search", "/playlist", "/album", "/artist", "/chart", "/purchased", "/artist-studio"].some((path) => location.pathname.startsWith(path));
-  const filteredThreads = threads.filter((thread) => {
+  const chatRows = [
+    ...threads.map((thread) => ({ type: "thread", user: thread.user, latestMessage: thread.latest_message, unreadCount: thread.unread_count || 0 })),
+    ...friends
+      .filter((friend) => !threads.some((thread) => thread.user?.id === friend.id))
+      .map((friend) => ({ type: "friend", user: friend, latestMessage: null, unreadCount: 0 })),
+  ];
+  const filteredChatRows = chatRows.filter((row) => {
     const query = chatSearch.trim().toLowerCase();
     if (!query) return true;
-    return `${thread.user?.username || ""} ${thread.latest_message?.content || ""}`.toLowerCase().includes(query);
+    return `${row.user?.username || ""} ${row.latestMessage?.content || ""}`.toLowerCase().includes(query);
   });
+  const toggleChatPref = (key) => {
+    setChatPrefs((current) => ({ ...current, [key]: !current[key] }));
+  };
 
   return (
     <header className="navbar">
@@ -411,11 +447,29 @@ const Navbar = ({ username, profilePicture, userId }) => {
             </div>
             {showChatSettings && (
               <div className="chat-settings-panel">
-                <strong><FaCog /> Chat settings</strong>
-                <span>Customise your Messenger experience.</span>
+                <div className="chat-settings-heading">
+                  <strong><FaCog /> Chat settings</strong>
+                  <span>Customise your Messenger experience.</span>
+                </div>
+                <button className="chat-setting-row" type="button" onClick={() => toggleChatPref("messageSounds")}>
+                  <span><FaVolumeUp /> Message sounds</span>
+                  <b className={chatPrefs.messageSounds ? "on" : ""}>{chatPrefs.messageSounds ? "On" : "Off"}</b>
+                </button>
+                <button className="chat-setting-row" type="button" onClick={() => toggleChatPref("popupMessages")}>
+                  <span><FaCommentDots /> Pop up new messages</span>
+                  <b className={chatPrefs.popupMessages ? "on" : ""}>{chatPrefs.popupMessages ? "On" : "Off"}</b>
+                </button>
+                <button className="chat-setting-row" type="button" onClick={() => toggleChatPref("activeStatus")}>
+                  <span><FaUsers /> Active status</span>
+                  <b className={chatPrefs.activeStatus ? "on" : ""}>{chatPrefs.activeStatus ? "On" : "Off"}</b>
+                </button>
+                <button className="chat-setting-row" type="button" onClick={() => navigate(userId ? `/profile/${userId}?tab=message` : "/social")}>
+                  <span><FaBan /> Block settings</span>
+                  <small>Manage muted and blocked people</small>
+                </button>
               </div>
             )}
-            <div className="chat-search">
+            <div className="chat-search chat-search-slim">
               <FaSearch />
               <input
                 value={chatSearch}
@@ -456,21 +510,21 @@ const Navbar = ({ username, profilePicture, userId }) => {
               </div>
             )}
             <div className="chat-thread-list">
-              {filteredThreads.length === 0 ? (
-                <p className="chat-empty">No messages yet.</p>
+              {filteredChatRows.length === 0 ? (
+                <p className="chat-empty">{chatSearch.trim() ? "No matching chats." : "No messages yet."}</p>
               ) : (
-                filteredThreads.map((thread) => (
-                  <button className="chat-thread-row" key={thread.user.id} onClick={() => openConversation(thread.user)}>
-                    {thread.user.profile_picture_url ? (
-                      <img src={thread.user.profile_picture_url} alt={thread.user.username} />
+                filteredChatRows.map((row) => (
+                  <button className="chat-thread-row" key={`${row.type}-${row.user.id}`} onClick={() => openConversation(row.user)}>
+                    {row.user.profile_picture_url ? (
+                      <img src={row.user.profile_picture_url} alt={row.user.username} />
                     ) : (
-                      <span>{getInitial(thread.user.username)}</span>
+                      <span>{getInitial(row.user.username)}</span>
                     )}
                     <div>
-                      <strong>{thread.user.username}</strong>
-                      <small>{thread.latest_message?.content || "Start a conversation"}</small>
+                      <strong>{row.user.username}</strong>
+                      <small>{row.latestMessage?.content || "Start a conversation"}</small>
                     </div>
-                    {thread.unread_count > 0 && <b>{thread.unread_count}</b>}
+                    {row.unreadCount > 0 && <b>{row.unreadCount}</b>}
                   </button>
                 ))
               )}
