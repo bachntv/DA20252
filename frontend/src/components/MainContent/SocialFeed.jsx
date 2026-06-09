@@ -830,7 +830,7 @@ const SocialFeed = () => {
   return (
     <div className="social-route-shell">
       <div
-        className="social-page facebook-shell"
+        className={`social-page facebook-shell ${activeSection === "reels" ? "reels-mode" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
       <aside className="social-left-rail">
