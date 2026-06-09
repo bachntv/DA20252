@@ -54,6 +54,7 @@ const SocialFeed = () => {
     cycleRepeatMode,
   } = usePlayer();
   const [scope, setScope] = useState("all");
+  const [activeSection, setActiveSection] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
   const [friends, setFriends] = useState({ friends: [], incoming_requests: [], outgoing_requests: [], suggestions: [] });
@@ -78,7 +79,11 @@ const SocialFeed = () => {
   const [storyCreatorStep, setStoryCreatorStep] = useState("type");
   const [comments, setComments] = useState({});
   const [shareDialogPost, setShareDialogPost] = useState(null);
+  const [shareDialogType, setShareDialogType] = useState("post");
+  const [shareMode, setShareMode] = useState("feed");
+  const [shareFriendId, setShareFriendId] = useState("");
   const [shareDraft, setShareDraft] = useState("");
+  const [reelState, setReelState] = useState({});
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const [users, setUsers] = useState([]);
@@ -396,13 +401,19 @@ const SocialFeed = () => {
     }
   };
 
-  const openShareDialog = (post) => {
-    setShareDialogPost(post);
+  const openShareDialog = (item, type = "post") => {
+    setShareDialogPost(item);
+    setShareDialogType(type);
+    setShareMode("feed");
+    setShareFriendId("");
     setShareDraft("");
   };
 
   const closeShareDialog = () => {
     setShareDialogPost(null);
+    setShareDialogType("post");
+    setShareMode("feed");
+    setShareFriendId("");
     setShareDraft("");
   };
 
@@ -410,6 +421,39 @@ const SocialFeed = () => {
     if (!shareDialogPost?.id) return;
 
     try {
+      if (shareMode === "friend") {
+        if (!shareFriendId) return;
+        const targetFriend = friends.friends.find((friend) => String(friend.id) === String(shareFriendId));
+        const label = shareDialogType === "reel" ? "reel" : "post";
+        await authFetch(`${API_BASE}/api/social/messages/${shareFriendId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `${shareDraft.trim() ? `${shareDraft.trim()}\n` : ""}Shared a ${label} from ${shareDialogPost.author?.username || "Social"}.`,
+          }),
+        });
+        if (targetFriend) await openChat(targetFriend);
+        closeShareDialog();
+        fetchThreads();
+        return;
+      }
+
+      if (shareDialogType === "reel") {
+        const res = await authFetch(`${API_BASE}/api/social/posts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: shareDraft.trim() || `Shared ${shareDialogPost.author?.username || "someone"}'s reel`,
+            track_id: shareDialogPost.track?.id || shareDialogPost.track?.track_id || null,
+          }),
+        });
+        const post = await res.json();
+        setPosts((prev) => [post, ...prev]);
+        closeShareDialog();
+        setActiveSection("feed");
+        return;
+      }
+
       const res = await authFetch(`${API_BASE}/api/social/posts/${shareDialogPost.id}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -422,6 +466,46 @@ const SocialFeed = () => {
     } catch (err) {
       console.error("Failed to share post", err);
     }
+  };
+
+  const openFeed = () => {
+    setActiveSection("feed");
+    fetchFeed();
+  };
+
+  const openReels = () => {
+    setActiveSection("reels");
+    fetchStories();
+  };
+
+  const toggleReelLike = (reelId) => {
+    setReelState((current) => {
+      const reel = current[reelId] || { liked: false, likeCount: 0, comments: [] };
+      return {
+        ...current,
+        [reelId]: {
+          ...reel,
+          liked: !reel.liked,
+          likeCount: Math.max(0, reel.likeCount + (reel.liked ? -1 : 1)),
+        },
+      };
+    });
+  };
+
+  const addReelComment = (reelId) => {
+    const value = comments[`reel-${reelId}`]?.trim();
+    if (!value) return;
+    setReelState((current) => {
+      const reel = current[reelId] || { liked: false, likeCount: 0, comments: [] };
+      return {
+        ...current,
+        [reelId]: {
+          ...reel,
+          comments: [...reel.comments, { id: `${Date.now()}`, author: username, content: value }],
+        },
+      };
+    });
+    setComments((prev) => ({ ...prev, [`reel-${reelId}`]: "" }));
   };
 
   const toggleFollow = async (user) => {
@@ -694,6 +778,8 @@ const SocialFeed = () => {
     if (profileUser?.id) navigate(`/profile/${profileUser.id}`);
   };
 
+  const reels = stories.filter((story) => story.story_type === "reel");
+
   useEffect(() => {
     if (!activeStory || activeStoryMediaType === "video") return undefined;
     if (activeStory.track) playTrack(activeStory.track);
@@ -719,9 +805,12 @@ const SocialFeed = () => {
         <div className="social-rail-title">
           <h2>Social</h2>
         </div>
-        <button className="rail-item active"><FaUserFriends /> Feed</button>
-        <button className="rail-item"><FaComment /> Messages</button>
-        <button className="rail-item"><FaCamera /> Stories</button>
+        <button className={`rail-item ${activeSection === "feed" ? "active" : ""}`} onClick={openFeed}>
+          <FaUserFriends /> Feed
+        </button>
+        <button className={`rail-item ${activeSection === "reels" ? "active" : ""}`} onClick={openReels}>
+          <FaCamera /> Reels
+        </button>
         <div className="rail-card">
           <span>Now playing</span>
           {currentTrack ? renderStaticTrack(currentTrack) : <p>No song selected.</p>}
@@ -731,15 +820,93 @@ const SocialFeed = () => {
       <main className="social-feed">
         <div className="social-topbar">
           <div>
-            <h2>Home</h2>
-            <p>Posts, songs, friends, and stories from your circle.</p>
+            <h2>{activeSection === "reels" ? "Reels" : "Home"}</h2>
+            <p>{activeSection === "reels" ? "Scroll reels, react, comment, share, and play the songs people used." : "Posts, songs, friends, and stories from your circle."}</p>
           </div>
-          <div className="scope-toggle">
-            <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
-            <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
-          </div>
+          {activeSection === "feed" && (
+            <div className="scope-toggle">
+              <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
+              <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
+            </div>
+          )}
         </div>
 
+        {activeSection === "reels" ? (
+          <section className="reels-page">
+            {reels.length === 0 ? (
+              <div className="social-empty">No reels yet.</div>
+            ) : (
+              reels.map((reel) => {
+                const reelMeta = reelState[reel.id] || { liked: false, likeCount: 0, comments: [] };
+                const reelMediaType = reel.media_type || (reel.image_url ? "image" : null);
+                const reelMediaUrl = reel.media_url || reel.image_url;
+                return (
+                  <article className="reel-card" key={reel.id}>
+                    <div className="reel-stage">
+                      {reelMediaType === "video" && reelMediaUrl ? (
+                        <video src={reelMediaUrl} controls playsInline />
+                      ) : reelMediaUrl ? (
+                        <img src={reelMediaUrl} alt="Reel" />
+                      ) : (
+                        <div className="story-viewer-empty">{reel.author.username?.[0]?.toUpperCase()}</div>
+                      )}
+                      <div className="reel-overlay">
+                        <div className="post-author">
+                          {renderUserAvatar(reel.author, "post-avatar")}
+                          <div>
+                            <strong className="profile-name-link" onClick={(event) => openUserProfile(reel.author, event)}>
+                              {reel.author.username}
+                            </strong>
+                            <span>{reel.content || "Shared a reel"}</span>
+                          </div>
+                        </div>
+                        {reel.track && (
+                          <button className="reel-song" type="button" onClick={() => playTrack(reel.track)}>
+                            <FaMusic />
+                            <span>{reel.track.title || reel.track.track_name}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="reel-actions">
+                      <button className={reelMeta.liked ? "active" : ""} onClick={() => toggleReelLike(reel.id)}>
+                        {reelMeta.liked ? <FaHeart /> : <FaRegHeart />} Like {reelMeta.likeCount}
+                      </button>
+                      <button onClick={() => setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] }))}>
+                        <FaComment /> Comment {reelMeta.comments.length}
+                      </button>
+                      <button onClick={() => openShareDialog(reel, "reel")}>
+                        <FaRetweet /> Share
+                      </button>
+                    </div>
+                    {comments[`reel-${reel.id}-open`] && (
+                      <div className="reel-comments">
+                        {reelMeta.comments.map((comment) => (
+                          <div className="comment-body" key={comment.id}>
+                            <strong>{comment.author}</strong>
+                            <span>{comment.content}</span>
+                          </div>
+                        ))}
+                        <div className="comment-input">
+                          <input
+                            value={comments[`reel-${reel.id}`] || ""}
+                            onChange={(event) => setComments((prev) => ({ ...prev, [`reel-${reel.id}`]: event.target.value }))}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") addReelComment(reel.id);
+                            }}
+                            placeholder="Write a comment"
+                          />
+                          <button onClick={() => addReelComment(reel.id)}>Send</button>
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })
+            )}
+          </section>
+        ) : (
+          <>
         <section className="stories-card">
           <div className="story-tray">
             <article className="story-tile create-story-tile">
@@ -929,6 +1096,8 @@ const SocialFeed = () => {
               </div>
             </article>
           ))
+        )}
+          </>
         )}
       </main>
 
@@ -1246,13 +1415,33 @@ const SocialFeed = () => {
         >
           <div className="share-dialog" onMouseDown={(event) => event.stopPropagation()}>
             <header className="share-dialog-header">
-              <h2>Share post</h2>
+              <h2>{shareDialogType === "reel" ? "Share reel" : "Share post"}</h2>
               <button onClick={closeShareDialog}><FaTimes /></button>
             </header>
+            <div className="share-mode-toggle">
+              <button className={shareMode === "feed" ? "active" : ""} onClick={() => setShareMode("feed")} type="button">
+                Share on feed
+              </button>
+              <button className={shareMode === "friend" ? "active" : ""} onClick={() => setShareMode("friend")} type="button">
+                Send to friend
+              </button>
+            </div>
+            {shareMode === "friend" && (
+              <select
+                className="share-friend-select"
+                value={shareFriendId}
+                onChange={(event) => setShareFriendId(event.target.value)}
+              >
+                <option value="">Choose a friend</option>
+                {friends.friends.map((friend) => (
+                  <option value={friend.id} key={friend.id}>{friend.username}</option>
+                ))}
+              </select>
+            )}
             <textarea
               value={shareDraft}
               onChange={(event) => setShareDraft(event.target.value)}
-              placeholder="Write something about this post"
+              placeholder={shareMode === "friend" ? "Write a message" : "Write something about this share"}
             />
             <div className="share-dialog-preview">
               <div className="post-author">
@@ -1270,7 +1459,9 @@ const SocialFeed = () => {
               )}
               {shareDialogPost.track && renderStaticTrack(shareDialogPost.track)}
             </div>
-            <button className="share-dialog-submit" onClick={sharePost}>Share</button>
+            <button className="share-dialog-submit" onClick={sharePost} disabled={shareMode === "friend" && !shareFriendId}>
+              {shareMode === "friend" ? "Send" : "Share"}
+            </button>
           </div>
         </section>
       )}
