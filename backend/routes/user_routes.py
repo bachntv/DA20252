@@ -14,6 +14,7 @@ from models.plan import Plan
 from models.playlist import Playlist
 from models.playlist_tracks import PlaylistTracks
 from models.playlist_user import PlaylistUser
+from models.song import Song
 from models.song_purchase import SongPurchase
 from schemas.user import UserUpdate
 from schemas.billing import BillingOverview, PlanResponse, SubscriptionSummary, PaymentResponse, SubscribeRequest, PaymentActionRequest
@@ -83,6 +84,17 @@ def serialize_private_user(user: User):
         "profile_picture_url": user.profile_picture_url,
         "cover_photo_url": user.cover_photo_url,
         "profile_background_color": user.profile_background_color,
+    }
+
+
+def serialize_public_profile_user(user: Optional[User]):
+    if not user:
+        return None
+    return {
+        "id": user.id,
+        "username": user.username,
+        "profile_picture_url": user.profile_picture_url,
+        "roles": user.roles,
     }
 
 # Get current user profile
@@ -229,6 +241,61 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
         .limit(10)
         .all()
     )
+    follower_users = (
+        db.query(User)
+        .join(SocialFollow, SocialFollow.follower_id == User.id)
+        .filter(SocialFollow.following_id == user.id)
+        .order_by(User.username.asc())
+        .limit(50)
+        .all()
+    )
+    following_users = (
+        db.query(User)
+        .join(SocialFollow, SocialFollow.following_id == User.id)
+        .filter(SocialFollow.follower_id == user.id)
+        .order_by(User.username.asc())
+        .limit(50)
+        .all()
+    )
+    friend_users = (
+        db.query(User)
+        .join(SocialFriendship, SocialFriendship.friend_id == User.id)
+        .filter(SocialFriendship.user_id == user.id)
+        .order_by(User.username.asc())
+        .limit(50)
+        .all()
+    )
+    owned_song_rows = (
+        db.query(SongPurchase, Song)
+        .join(Song, Song.track_id == SongPurchase.track_id)
+        .filter(SongPurchase.user_id == user.id, SongPurchase.status == "owned")
+        .order_by(Song.track_name.asc())
+        .limit(50)
+        .all()
+    )
+
+    serialized_playlists = [
+        {
+            "id": playlist.id,
+            "name": playlist.name,
+            "description": playlist.description,
+            "cover_image_url": playlist.cover_image_url,
+            "created_at": link.created_at.isoformat() if link.created_at else None,
+            "track_count": db.query(PlaylistTracks).filter(PlaylistTracks.playlist_id == playlist.id).count(),
+        }
+        for link, playlist in playlist_rows
+    ]
+    serialized_posts = [
+        {
+            "id": post.id,
+            "content": post.content,
+            "created_at": post.created_at.isoformat(),
+            "image_url": post.image_url,
+            "media_url": post.media_url or post.image_url,
+            "media_type": post.media_type or ("image" if post.image_url else None),
+        }
+        for post in recent_posts
+    ]
 
     return {
         "id": user.id,
@@ -250,28 +317,25 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
         "is_muted": is_muted,
         "is_blocked": is_blocked,
         "has_blocked_you": has_blocked_you,
-        "playlists": [
-            {
-                "id": playlist.id,
-                "name": playlist.name,
-                "description": playlist.description,
-                "cover_image_url": playlist.cover_image_url,
-                "created_at": link.created_at.isoformat() if link.created_at else None,
-                "track_count": db.query(PlaylistTracks).filter(PlaylistTracks.playlist_id == playlist.id).count(),
-            }
-            for link, playlist in playlist_rows
-        ],
-        "recent_posts": [
-            {
-                "id": post.id,
-                "content": post.content,
-                "created_at": post.created_at.isoformat(),
-                "image_url": post.image_url,
-                "media_url": post.media_url or post.image_url,
-                "media_type": post.media_type or ("image" if post.image_url else None),
-            }
-            for post in recent_posts
-        ],
+        "playlists": serialized_playlists,
+        "recent_posts": serialized_posts,
+        "profile_lists": {
+            "posts": serialized_posts,
+            "playlists": serialized_playlists,
+            "followers": [serialize_public_profile_user(item) for item in follower_users],
+            "following": [serialize_public_profile_user(item) for item in following_users],
+            "friends": [serialize_public_profile_user(item) for item in friend_users],
+            "owned_songs": [
+                {
+                    "id": song.track_id,
+                    "title": song.track_name,
+                    "artist": None,
+                    "cover_url": song.track_image_url,
+                    "purchased_at": purchase.created_at.isoformat() if purchase.created_at else None,
+                }
+                for purchase, song in owned_song_rows
+            ],
+        },
     }
 
 # Change password

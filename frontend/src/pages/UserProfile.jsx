@@ -29,6 +29,7 @@ const UserProfile = () => {
   const [storyType, setStoryType] = useState("story");
   const [storyMedia, setStoryMedia] = useState(null);
   const [isBannerEditorOpen, setIsBannerEditorOpen] = useState(false);
+  const [activeStatList, setActiveStatList] = useState(null);
   const [activeProfileTab, setActiveProfileTab] = useState(() => {
     const requestedTab = new URLSearchParams(location.search).get("tab");
     return requestedTab === "message" ? "posts" : requestedTab || "posts";
@@ -187,6 +188,64 @@ const UserProfile = () => {
     return <div className="user-profile-page"><div className="profile-empty">Profile not found.</div></div>;
   }
 
+  const statItems = [
+    { key: "posts", label: "Posts", value: profile.stats.posts },
+    { key: "owned_songs", label: "Songs owned", value: profile.stats.owned_songs },
+    { key: "followers", label: "Followers", value: profile.stats.followers },
+    { key: "following", label: "Following", value: profile.stats.following },
+    { key: "friends", label: "Friends", value: profile.stats.friends },
+  ];
+  const activeStat = statItems.find((item) => item.key === activeStatList);
+  const activeListItems = activeStat ? profile.profile_lists?.[activeStat.key] || [] : [];
+
+  const renderStatListItem = (item) => {
+    if (["followers", "following", "friends"].includes(activeStatList)) {
+      return (
+        <button className="profile-stat-list-row" key={item.id} onClick={() => { setActiveStatList(null); navigate(`/profile/${item.id}`); }}>
+          <UserAvatar user={item} className="profile-stat-avatar" />
+          <div>
+            <strong>{item.username}</strong>
+            <span>{item.roles?.includes("artist") ? "Artist account" : "Music listener"}</span>
+          </div>
+        </button>
+      );
+    }
+
+    if (activeStatList === "owned_songs") {
+      return (
+        <div className="profile-stat-list-row" key={item.id}>
+          {item.cover_url ? <img src={item.cover_url} alt={item.title} /> : <div className="profile-stat-art">{item.title?.[0]?.toUpperCase() || "S"}</div>}
+          <div>
+            <strong>{item.title}</strong>
+            <span>{item.artist || "Owned song"}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeStatList === "playlists") {
+      return (
+        <div className="profile-stat-list-row" key={item.id}>
+          {item.cover_image_url ? <img src={item.cover_image_url} alt={item.name} /> : <div className="profile-stat-art">{item.name?.[0]?.toUpperCase() || "P"}</div>}
+          <div>
+            <strong>{item.name}</strong>
+            <span>{item.track_count} songs</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="profile-stat-list-row" key={item.id}>
+        <div className="profile-stat-art">{item.content?.[0]?.toUpperCase() || "P"}</div>
+        <div>
+          <strong>{item.content || "Post"}</strong>
+          <span>{new Date(item.created_at).toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="user-profile-page">
       <button className="profile-back-button" onClick={() => navigate(-1)}>
@@ -304,11 +363,12 @@ const UserProfile = () => {
       )}
 
       <section className="profile-stats">
-        <div><strong>{profile.stats.posts}</strong><span>Posts</span></div>
-        <div><strong>{profile.stats.owned_songs}</strong><span>Songs owned</span></div>
-        <div><strong>{profile.stats.followers}</strong><span>Followers</span></div>
-        <div><strong>{profile.stats.following}</strong><span>Following</span></div>
-        <div><strong>{profile.stats.friends}</strong><span>Friends</span></div>
+        {statItems.map((item) => (
+          <button key={item.key} onClick={() => setActiveStatList(item.key)}>
+            <strong>{item.value}</strong>
+            <span>{item.label}</span>
+          </button>
+        ))}
       </section>
 
       {activeProfileTab === "posts" && (
@@ -329,6 +389,32 @@ const UserProfile = () => {
               </article>
             ))
           )}
+        </section>
+      )}
+
+      {activeStat && (
+        <section
+          className="profile-stat-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActiveStatList(null);
+          }}
+        >
+          <div className="profile-stat-modal">
+            <header>
+              <div>
+                <h2>{activeStat.label}</h2>
+                <span>{activeStat.value} total</span>
+              </div>
+              <button onClick={() => setActiveStatList(null)}>Close</button>
+            </header>
+            <div className="profile-stat-list">
+              {activeListItems.length === 0 ? (
+                <p className="profile-empty">Nothing to show yet.</p>
+              ) : (
+                activeListItems.map(renderStatListItem)
+              )}
+            </div>
+          </div>
         </section>
       )}
     </div>
