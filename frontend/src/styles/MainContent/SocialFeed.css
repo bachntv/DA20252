@@ -206,13 +206,12 @@
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
-  flex: 1 1 190px;
   font-size: 13px;
   font-weight: 800;
   gap: 8px;
   justify-content: center;
   min-height: 36px;
-  min-width: 180px;
+  min-width: 0;
   padding: 8px 16px;
   white-space: nowrap;
 }
@@ -555,10 +554,10 @@
 
 .composer-options {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
-  min-width: min(100%, 380px);
+  width: min(100%, 430px);
 }
 
 .composer-post-button {
