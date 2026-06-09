@@ -463,7 +463,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
                   <span><FaUsers /> Active status</span>
                   <b className={chatPrefs.activeStatus ? "on" : ""}>{chatPrefs.activeStatus ? "On" : "Off"}</b>
                 </button>
-                <button className="chat-setting-row" type="button" onClick={() => navigate(userId ? `/profile/${userId}?tab=message` : "/social")}>
+                <button className="chat-setting-row" type="button" onClick={() => navigate(userId ? `/profile/${userId}` : "/social")}>
                   <span><FaBan /> Block settings</span>
                   <small>Manage muted and blocked people</small>
                 </button>
@@ -583,7 +583,6 @@ const Navbar = ({ username, profilePicture, userId }) => {
               <>
                 <div className="account-name">{username}</div>
                 {userId && <button className="button" onClick={() => navigate(`/profile/${userId}`)}>Profile</button>}
-                {userId && <button className="button" onClick={() => navigate(`/profile/${userId}?tab=message`)}>Messages</button>}
                 <button className="button" onClick={() => navigate("/setting")}>Setting</button>
                 {roles.includes("artist") && (
                   <button className="button" onClick={() => navigate("/artist-studio")}>
