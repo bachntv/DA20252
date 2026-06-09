@@ -876,7 +876,7 @@ const SocialFeed = () => {
                   <article className="reel-card" key={reel.id}>
                     <div className="reel-stage">
                       {reelMediaType === "video" && reelMediaUrl ? (
-                        <video src={reelMediaUrl} controls playsInline />
+                        <video src={reelMediaUrl} autoPlay loop playsInline controls />
                       ) : reelMediaUrl ? (
                         <img src={reelMediaUrl} alt="Reel" />
                       ) : (
@@ -899,17 +899,20 @@ const SocialFeed = () => {
                           </button>
                         )}
                       </div>
-                    </div>
-                    <div className="reel-actions">
-                      <button className={reelMeta.liked ? "active" : ""} onClick={() => toggleReelLike(reel.id)}>
-                        {reelMeta.liked ? <FaHeart /> : <FaRegHeart />} Like {reelMeta.likeCount}
-                      </button>
-                      <button onClick={() => setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] }))}>
-                        <FaComment /> Comment {reelMeta.comments.length}
-                      </button>
-                      <button onClick={() => openShareDialog(reel, "reel")}>
-                        <FaRetweet /> Share
-                      </button>
+                      <div className="reel-actions">
+                        <button className={reelMeta.liked ? "active" : ""} onClick={() => toggleReelLike(reel.id)} title="Like">
+                          {reelMeta.liked ? <FaHeart /> : <FaRegHeart />}
+                          <span>{reelMeta.likeCount}</span>
+                        </button>
+                        <button onClick={() => setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] }))} title="Comment">
+                          <FaComment />
+                          <span>{reelMeta.comments.length}</span>
+                        </button>
+                        <button onClick={() => openShareDialog(reel, "reel")} title="Share">
+                          <FaRetweet />
+                          <span>Share</span>
+                        </button>
+                      </div>
                     </div>
                     {comments[`reel-${reel.id}-open`] && (
                       <div className="reel-comments">
