@@ -97,6 +97,11 @@ const SocialFeed = () => {
   const [likedTrackIds, setLikedTrackIds] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
   const storySongPickerRef = useRef(null);
+  const reelCardsRef = useRef({});
+  const reelMediaRefs = useRef({});
+  const reelAudioRefs = useRef({});
+  const [activeReelId, setActiveReelId] = useState(null);
+  const [reelAudioUrls, setReelAudioUrls] = useState({});
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -608,25 +613,36 @@ const SocialFeed = () => {
     }
   };
 
-  const playTrack = useCallback(async (track) => {
-    if (!track?.id && !track?.title) return;
+  const getTrackTitle = useCallback((track) => track?.track_name || track?.title || "", []);
 
-    const title = track.track_name || track.title;
+  const fetchTrackMp3Url = useCallback(async (track) => {
+    const title = getTrackTitle(track);
+    if (!title) return "";
+    if (track?.mp3_url) return track.mp3_url;
+
+    const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(title)}`);
+    const data = await res.json();
+    return data.url || "";
+  }, [getTrackTitle]);
+
+  const playTrack = useCallback(async (track) => {
+    const title = getTrackTitle(track);
+    if (!track?.id && !title) return;
+
     try {
-      const res = await fetch(`${API_BASE}/api/music/mp3url/${encodeURIComponent(title)}`);
-      const data = await res.json();
+      const mp3Url = await fetchTrackMp3Url(track);
       playSong({
         ...track,
         id: track.id || track.track_id,
         track_name: title,
         title,
         artist: track.artist || track.artist_name || "Shared song",
-        mp3_url: data.url,
+        mp3_url: mp3Url,
       });
     } catch (err) {
       console.error("Failed to play shared song", err);
     }
-  }, [playSong]);
+  }, [fetchTrackMp3Url, getTrackTitle, playSong]);
 
   const renderTrack = (track) => {
     if (!track) return null;
@@ -810,7 +826,88 @@ const SocialFeed = () => {
     if (profileUser?.id) navigate(`/profile/${profileUser.id}`);
   };
 
-  const reels = stories.filter((story) => story.story_type === "reel");
+  const reels = useMemo(() => stories.filter((story) => story.story_type === "reel"), [stories]);
+
+  useEffect(() => {
+    if (activeSection !== "reels" || reels.length === 0) {
+      setActiveReelId(null);
+      return;
+    }
+    setActiveReelId((current) => (
+      current && reels.some((reel) => String(reel.id) === String(current))
+        ? current
+        : reels[0].id
+    ));
+  }, [activeSection, reels]);
+
+  useEffect(() => {
+    if (activeSection !== "reels" || reels.length === 0) return undefined;
+
+    const observer = new IntersectionObserver((entries) => {
+      const mostVisible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+      if (mostVisible?.target?.dataset?.reelId) {
+        setActiveReelId(mostVisible.target.dataset.reelId);
+      }
+    }, { threshold: [0.35, 0.55, 0.75] });
+
+    reels.forEach((reel) => {
+      const node = reelCardsRef.current[reel.id];
+      if (node) observer.observe(node);
+    });
+
+    return () => observer.disconnect();
+  }, [activeSection, reels]);
+
+  useEffect(() => {
+    if (activeSection !== "reels") return;
+
+    reels.forEach(async (reel) => {
+      if (!reel.track || reelAudioUrls[reel.id]) return;
+      try {
+        const mp3Url = await fetchTrackMp3Url(reel.track);
+        if (mp3Url) {
+          setReelAudioUrls((current) => ({ ...current, [reel.id]: mp3Url }));
+        }
+      } catch (err) {
+        console.error("Failed to load reel song", err);
+      }
+    });
+  }, [activeSection, fetchTrackMp3Url, reelAudioUrls, reels]);
+
+  useEffect(() => {
+    Object.entries(reelAudioRefs.current).forEach(([reelId, audio]) => {
+      if (!audio) return;
+      const isActive = activeSection === "reels" && String(reelId) === String(activeReelId);
+      if (isActive) {
+        audio.volume = 0.72;
+        audio.play().catch(() => {});
+      } else {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    });
+
+    Object.entries(reelMediaRefs.current).forEach(([reelId, video]) => {
+      if (!video) return;
+      const isActive = activeSection === "reels" && String(reelId) === String(activeReelId);
+      if (isActive) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    });
+  }, [activeReelId, activeSection, reelAudioUrls]);
+
+  const playReelTrackInMainPlayer = (reel) => {
+    const audio = reelAudioRefs.current[reel.id];
+    const media = reelMediaRefs.current[reel.id];
+    audio?.pause();
+    media?.pause();
+    playTrack(reel.track);
+  };
 
   useEffect(() => {
     if (!activeStory || activeStoryMediaType === "video") return undefined;
@@ -873,14 +970,44 @@ const SocialFeed = () => {
                 const reelMediaType = reel.media_type || (reel.image_url ? "image" : null);
                 const reelMediaUrl = reel.media_url || reel.image_url;
                 return (
-                  <article className="reel-card" key={reel.id}>
+                  <article
+                    className="reel-card"
+                    data-reel-id={reel.id}
+                    key={reel.id}
+                    ref={(node) => {
+                      if (node) reelCardsRef.current[reel.id] = node;
+                      else delete reelCardsRef.current[reel.id];
+                    }}
+                  >
                     <div className="reel-stage">
                       {reelMediaType === "video" && reelMediaUrl ? (
-                        <video src={reelMediaUrl} autoPlay loop playsInline controls />
+                        <video
+                          ref={(node) => {
+                            if (node) reelMediaRefs.current[reel.id] = node;
+                            else delete reelMediaRefs.current[reel.id];
+                          }}
+                          src={reelMediaUrl}
+                          autoPlay
+                          loop
+                          muted={Boolean(reel.track)}
+                          playsInline
+                          controls
+                        />
                       ) : reelMediaUrl ? (
                         <img src={reelMediaUrl} alt="Reel" />
                       ) : (
                         <div className="story-viewer-empty">{reel.author.username?.[0]?.toUpperCase()}</div>
+                      )}
+                      {reel.track && reelAudioUrls[reel.id] && (
+                        <audio
+                          ref={(node) => {
+                            if (node) reelAudioRefs.current[reel.id] = node;
+                            else delete reelAudioRefs.current[reel.id];
+                          }}
+                          src={reelAudioUrls[reel.id]}
+                          loop
+                          preload="auto"
+                        />
                       )}
                       <div className="reel-overlay">
                         <div className="post-author">
@@ -893,7 +1020,7 @@ const SocialFeed = () => {
                           </div>
                         </div>
                         {reel.track && (
-                          <button className="reel-song" type="button" onClick={() => playTrack(reel.track)}>
+                          <button className="reel-song" type="button" onClick={() => playReelTrackInMainPlayer(reel)}>
                             <FaMusic />
                             <span>{reel.track.title || reel.track.track_name}</span>
                           </button>
