@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FaCamera,
   FaCheck,
@@ -74,6 +74,7 @@ const SocialFeed = () => {
   const [selectedStoryTrack, setSelectedStoryTrack] = useState(null);
   const [storySongQuery, setStorySongQuery] = useState("");
   const [storySongResults, setStorySongResults] = useState([]);
+  const [isStorySongPickerOpen, setIsStorySongPickerOpen] = useState(false);
   const [storyType, setStoryType] = useState("story");
   const [isStoryCreatorOpen, setIsStoryCreatorOpen] = useState(false);
   const [storyCreatorStep, setStoryCreatorStep] = useState("type");
@@ -95,6 +96,7 @@ const SocialFeed = () => {
   const [editingCommentContent, setEditingCommentContent] = useState("");
   const [likedTrackIds, setLikedTrackIds] = useState([]);
   const [userPlaylists, setUserPlaylists] = useState([]);
+  const storySongPickerRef = useRef(null);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -280,6 +282,7 @@ const SocialFeed = () => {
       setSelectedStoryTrack(null);
       setStorySongQuery("");
       setStorySongResults([]);
+      setIsStorySongPickerOpen(false);
       setStoryType("story");
       setIsStoryCreatorOpen(false);
       setStoryCreatorStep("type");
@@ -310,6 +313,7 @@ const SocialFeed = () => {
     setSelectedStoryTrack(null);
     setStorySongQuery("");
     setStorySongResults([]);
+    setIsStorySongPickerOpen(false);
     setStoryType("story");
   };
 
@@ -702,7 +706,7 @@ const SocialFeed = () => {
   };
 
   const storySongOptions = [
-    ...(currentTrack ? [{ ...currentTrack, isCurrent: true }] : []),
+    ...(currentTrack && (!storySongQuery.trim() || `${currentTrack.title || ""} ${currentTrack.artist || ""}`.toLowerCase().includes(storySongQuery.trim().toLowerCase())) ? [{ ...currentTrack, isCurrent: true }] : []),
     ...storySongResults
       .map(normalizeTrack)
       .filter(Boolean)
@@ -726,7 +730,24 @@ const SocialFeed = () => {
       try {
         const res = await fetch(`${API_BASE}/api/music/search?query=${encodeURIComponent(query)}&filter_by=track`);
         const data = await res.json();
-        setStorySongResults(Array.isArray(data) ? data : []);
+        const lowered = query.toLowerCase();
+        const sorted = (Array.isArray(data) ? data : []).slice().sort((a, b) => {
+          const aTitle = (a.title || a.track_name || "").toLowerCase();
+          const bTitle = (b.title || b.track_name || "").toLowerCase();
+          const aArtist = (a.artist || a.artist_name || "").toLowerCase();
+          const bArtist = (b.artist || b.artist_name || "").toLowerCase();
+          const rank = (title, artist) => {
+            if (title.startsWith(lowered)) return 0;
+            if (artist.startsWith(lowered)) return 1;
+            if (title.includes(lowered)) return 2;
+            if (artist.includes(lowered)) return 3;
+            return 4;
+          };
+          const rankDiff = rank(aTitle, aArtist) - rank(bTitle, bArtist);
+          if (rankDiff !== 0) return rankDiff;
+          return aTitle.localeCompare(bTitle) || aArtist.localeCompare(bArtist);
+        });
+        setStorySongResults(sorted);
       } catch (err) {
         console.error("Failed to search story songs", err);
       }
@@ -734,6 +755,17 @@ const SocialFeed = () => {
 
     return () => clearTimeout(timer);
   }, [isStoryCreatorOpen, storyCreatorStep, storySongQuery]);
+
+  useEffect(() => {
+    if (!isStorySongPickerOpen) return undefined;
+    const closePicker = (event) => {
+      if (storySongPickerRef.current && !storySongPickerRef.current.contains(event.target)) {
+        setIsStorySongPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closePicker);
+    return () => document.removeEventListener("mousedown", closePicker);
+  }, [isStorySongPickerOpen]);
 
   const activeStory = activeStoryIndex === null ? null : stories[activeStoryIndex];
   const activeStoryMediaType = activeStory?.media_type || (activeStory?.image_url ? "image" : null);
@@ -1365,34 +1397,49 @@ const SocialFeed = () => {
                     placeholder={storyType === "story" ? "Say something for 24 hours" : "Caption your reel"}
                   />
                   <div className="story-song-picker">
-                    <div className="story-song-picker-header">
+                    <div className="story-song-picker-header" onClick={() => setIsStorySongPickerOpen(true)}>
                       <strong>Choose song</strong>
                       {selectedStoryTrack && (
-                        <button onClick={() => setSelectedStoryTrack(null)} type="button">
+                        <button onClick={(event) => { event.stopPropagation(); setSelectedStoryTrack(null); setIsStorySongPickerOpen(true); }} type="button">
                           Remove
                         </button>
                       )}
                     </div>
-                    <input
-                      value={storySongQuery}
-                      onChange={(event) => setStorySongQuery(event.target.value)}
-                      placeholder="Search songs"
-                    />
-                    <div className="story-song-options">
-                      {storySongOptions.length === 0 ? (
-                        <p>No song selected.</p>
-                      ) : (
-                        storySongOptions.slice(0, 8).map((track) => (
-                          <button
-                            className={`story-song-option ${selectedStoryTrack?.id === track.id ? "selected" : ""}`}
-                            key={`${track.isCurrent ? "current" : "search"}-${track.id}`}
-                            onClick={() => setSelectedStoryTrack(track)}
-                            type="button"
-                          >
-                            {renderStaticTrack(track)}
-                            {track.isCurrent && <span className="current-song-badge">Current song</span>}
-                          </button>
-                        ))
+                    {selectedStoryTrack && !isStorySongPickerOpen && (
+                      <button className="story-selected-song" onClick={() => setIsStorySongPickerOpen(true)} type="button">
+                        {renderStaticTrack(selectedStoryTrack)}
+                      </button>
+                    )}
+                    <div ref={storySongPickerRef}>
+                      {isStorySongPickerOpen && (
+                        <>
+                          <input
+                            value={storySongQuery}
+                            onChange={(event) => setStorySongQuery(event.target.value)}
+                            onFocus={() => setIsStorySongPickerOpen(true)}
+                            placeholder="Search songs"
+                          />
+                          <div className="story-song-options">
+                            {storySongOptions.length === 0 ? (
+                              <p>No songs found.</p>
+                            ) : (
+                              storySongOptions.slice(0, 8).map((track) => (
+                                <button
+                                  className={`story-song-option ${selectedStoryTrack?.id === track.id ? "selected" : ""}`}
+                                  key={`${track.isCurrent ? "current" : "search"}-${track.id}`}
+                                  onClick={() => {
+                                    setSelectedStoryTrack(track);
+                                    setIsStorySongPickerOpen(false);
+                                  }}
+                                  type="button"
+                                >
+                                  {renderStaticTrack(track)}
+                                  {track.isCurrent && <span className="current-song-badge">Current song</span>}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
