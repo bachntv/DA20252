@@ -990,28 +990,50 @@ img.story-owner-avatar {
   position: relative;
 }
 
-.reel-stage video,
-.reel-stage img {
+.reel-stage > video,
+.reel-stage > img {
   height: 100%;
   object-fit: contain;
   width: 100%;
 }
 
 .reel-overlay {
-  background: linear-gradient(180deg, transparent, rgba(3, 7, 18, 0.82));
-  bottom: 0;
+  background: linear-gradient(180deg, rgba(3, 7, 18, 0.78), transparent);
+  top: 0;
   color: #fff;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   left: 0;
-  padding: 90px 16px 16px;
+  padding: 14px 16px 70px;
   position: absolute;
   right: 0;
 }
 
 .reel-overlay .post-avatar {
   border: 2px solid rgba(255, 255, 255, 0.72);
+  height: 42px;
+  width: 42px;
+}
+
+.reel-overlay img.post-avatar {
+  object-fit: cover;
+}
+
+.reel-overlay .post-author {
+  min-width: 0;
+}
+
+.reel-overlay .post-author > div {
+  min-width: 0;
+}
+
+.reel-overlay strong,
+.reel-overlay span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reel-overlay span {
