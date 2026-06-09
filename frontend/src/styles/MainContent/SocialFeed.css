@@ -206,11 +206,26 @@
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
+  flex: 1 1 190px;
   font-size: 13px;
   font-weight: 800;
   gap: 8px;
+  justify-content: center;
   min-height: 36px;
-  padding: 8px 12px;
+  min-width: 180px;
+  padding: 8px 16px;
+  white-space: nowrap;
+}
+
+.composer-pill input[type="checkbox"] {
+  flex: 0 0 auto;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.composer-pill svg {
+  flex: 0 0 auto;
 }
 
 .photo-picker input {
@@ -543,6 +558,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: min(100%, 380px);
 }
 
 .composer-post-button {
