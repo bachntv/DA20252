@@ -307,8 +307,8 @@
   text-align: left;
 }
 
-.story-tile img,
-.story-tile video,
+.story-tile > img,
+.story-tile > video,
 .story-gradient {
   height: 100%;
   object-fit: cover;
@@ -451,6 +451,10 @@
   top: 10px;
   width: 36px;
   z-index: 2;
+}
+
+img.story-owner-avatar {
+  object-fit: cover;
 }
 
 .story-type-badge {
@@ -1543,8 +1547,8 @@
   position: relative;
 }
 
-.story-viewer-stage img,
-.story-viewer-stage video {
+.story-viewer-stage > img,
+.story-viewer-stage > video {
   height: 100%;
   object-fit: contain;
   width: 100%;
@@ -1585,6 +1589,12 @@
   color: #fff;
   margin: 0;
   padding: 0;
+}
+
+.story-viewer-song .social-track img {
+  flex: 0 0 auto;
+  height: 42px;
+  width: 42px;
 }
 
 .story-viewer-song .social-track span {
