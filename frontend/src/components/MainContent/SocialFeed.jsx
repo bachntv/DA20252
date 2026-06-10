@@ -9,6 +9,8 @@ import {
   FaHeart,
   FaMusic,
   FaPaperPlane,
+  FaPause,
+  FaPlay,
   FaPlus,
   FaRegHeart,
   FaRetweet,
@@ -16,9 +18,12 @@ import {
   FaSearch,
   FaTimes,
   FaTrash,
+  FaVolumeMute,
+  FaVolumeUp,
   FaUserCheck,
   FaUserFriends,
   FaUserPlus,
+  FaExpand,
 } from "react-icons/fa";
 import { authFetch } from "../../utils/authFetch";
 import { usePlayer } from "../../context/PlayerContext";
@@ -100,8 +105,11 @@ const SocialFeed = () => {
   const reelCardsRef = useRef({});
   const reelMediaRefs = useRef({});
   const reelAudioRefs = useRef({});
+  const reelLastTimeRef = useRef({});
   const [activeReelId, setActiveReelId] = useState(null);
   const [reelAudioUrls, setReelAudioUrls] = useState({});
+  const [pausedReelIds, setPausedReelIds] = useState({});
+  const [mutedReelIds, setMutedReelIds] = useState({});
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -814,6 +822,20 @@ const SocialFeed = () => {
     setActiveStoryIndex(index);
   };
 
+  const openStoryOrReel = (story, index) => {
+    if (story.story_type === "reel") {
+      setActiveStoryIndex(null);
+      setActiveSection("reels");
+      setActiveReelId(story.id);
+      window.requestAnimationFrame(() => {
+        reelCardsRef.current[story.id]?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+      return;
+    }
+
+    openStoryViewer(index);
+  };
+
   const renderUserAvatar = (profileUser, className = "post-avatar") => {
     if (profileUser?.profile_picture_url) {
       return <img className={`${className} avatar-image`} src={profileUser.profile_picture_url} alt={profileUser.username} />;
@@ -877,13 +899,74 @@ const SocialFeed = () => {
     });
   }, [activeSection, fetchTrackMp3Url, reelAudioUrls, reels]);
 
+  const pauseReel = useCallback((reelId) => {
+    reelMediaRefs.current[reelId]?.pause();
+    reelAudioRefs.current[reelId]?.pause();
+    setPausedReelIds((current) => ({ ...current, [reelId]: true }));
+  }, []);
+
+  const playReel = useCallback((reelId) => {
+    setActiveReelId(reelId);
+    setPausedReelIds((current) => ({ ...current, [reelId]: false }));
+    if (isPlaying) stop();
+
+    const media = reelMediaRefs.current[reelId];
+    const audio = reelAudioRefs.current[reelId];
+    media?.play?.().catch(() => {});
+    audio?.play?.().catch(() => {});
+  }, [isPlaying, stop]);
+
+  const toggleReelPlayback = (reelId) => {
+    const isPaused = pausedReelIds[reelId];
+    const media = reelMediaRefs.current[reelId];
+    const audio = reelAudioRefs.current[reelId];
+    const isActuallyPlaying = media ? !media.paused : audio ? !audio.paused : !isPaused;
+
+    if (isActuallyPlaying && !isPaused) {
+      pauseReel(reelId);
+    } else {
+      playReel(reelId);
+    }
+  };
+
+  const toggleReelMute = (reelId) => {
+    setMutedReelIds((current) => ({ ...current, [reelId]: !current[reelId] }));
+  };
+
+  const openReelFullscreen = (reelId) => {
+    const stage = reelMediaRefs.current[reelId]?.parentElement;
+    if (stage?.requestFullscreen) stage.requestFullscreen().catch(() => {});
+  };
+
+  const syncReelSongToVideo = (reelId) => {
+    const video = reelMediaRefs.current[reelId];
+    const audio = reelAudioRefs.current[reelId];
+    if (!video || !audio) return;
+
+    const lastTime = reelLastTimeRef.current[reelId] || 0;
+    const looped = video.currentTime + 0.25 < lastTime;
+    if (looped) {
+      audio.currentTime = 0;
+    } else if (video.duration && audio.duration && video.currentTime < audio.duration) {
+      const targetTime = Math.min(video.currentTime, video.duration);
+      if (Math.abs(audio.currentTime - targetTime) > 0.8) {
+        audio.currentTime = targetTime;
+      }
+    }
+    reelLastTimeRef.current[reelId] = video.currentTime;
+  };
+
   useEffect(() => {
     Object.entries(reelAudioRefs.current).forEach(([reelId, audio]) => {
       if (!audio) return;
       const isActive = activeSection === "reels" && String(reelId) === String(activeReelId);
-      if (isActive) {
+      const isPaused = pausedReelIds[reelId];
+      audio.muted = Boolean(mutedReelIds[reelId]);
+      if (isActive && !isPaused) {
         audio.volume = 0.72;
         audio.play().catch(() => {});
+      } else if (isActive) {
+        audio.pause();
       } else {
         audio.pause();
         audio.currentTime = 0;
@@ -893,19 +976,23 @@ const SocialFeed = () => {
     Object.entries(reelMediaRefs.current).forEach(([reelId, video]) => {
       if (!video) return;
       const isActive = activeSection === "reels" && String(reelId) === String(activeReelId);
-      if (isActive) {
+      const isPaused = pausedReelIds[reelId];
+      const reel = reels.find((item) => String(item.id) === String(reelId));
+      video.muted = reel?.track ? true : Boolean(mutedReelIds[reelId]);
+      if (isActive && !isPaused) {
         video.play().catch(() => {});
       } else {
         video.pause();
       }
     });
-  }, [activeReelId, activeSection, reelAudioUrls]);
+  }, [activeReelId, activeSection, mutedReelIds, pausedReelIds, reelAudioUrls, reels]);
 
   const playReelTrackInMainPlayer = (reel) => {
     const audio = reelAudioRefs.current[reel.id];
     const media = reelMediaRefs.current[reel.id];
     audio?.pause();
     media?.pause();
+    setPausedReelIds((current) => ({ ...current, [reel.id]: true }));
     playTrack(reel.track);
   };
 
@@ -969,6 +1056,9 @@ const SocialFeed = () => {
                 const reelMeta = reelState[reel.id] || { liked: false, likeCount: 0, comments: [] };
                 const reelMediaType = reel.media_type || (reel.image_url ? "image" : null);
                 const reelMediaUrl = reel.media_url || reel.image_url;
+                const isActiveReel = String(activeReelId) === String(reel.id);
+                const isReelPaused = Boolean(pausedReelIds[reel.id]) || !isActiveReel;
+                const isReelMuted = Boolean(mutedReelIds[reel.id]);
                 return (
                   <article
                     className="reel-card"
@@ -979,7 +1069,7 @@ const SocialFeed = () => {
                       else delete reelCardsRef.current[reel.id];
                     }}
                   >
-                    <div className="reel-stage">
+                    <div className="reel-stage" onClick={() => toggleReelPlayback(reel.id)}>
                       {reelMediaType === "video" && reelMediaUrl ? (
                         <video
                           ref={(node) => {
@@ -991,7 +1081,10 @@ const SocialFeed = () => {
                           loop
                           muted={Boolean(reel.track)}
                           playsInline
-                          controls
+                          onLoadedMetadata={() => {
+                            reelLastTimeRef.current[reel.id] = 0;
+                          }}
+                          onTimeUpdate={() => syncReelSongToVideo(reel.id)}
                         />
                       ) : reelMediaUrl ? (
                         <img src={reelMediaUrl} alt="Reel" />
@@ -1006,9 +1099,45 @@ const SocialFeed = () => {
                           }}
                           src={reelAudioUrls[reel.id]}
                           loop
+                          muted={isReelMuted}
                           preload="auto"
                         />
                       )}
+                      <div className="reel-top-controls">
+                        <button
+                          type="button"
+                          className="reel-control-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleReelMute(reel.id);
+                          }}
+                          title={isReelMuted ? "Turn sound on" : "Mute reel"}
+                        >
+                          {isReelMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+                        </button>
+                        <button
+                          type="button"
+                          className="reel-control-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openReelFullscreen(reel.id);
+                          }}
+                          title="Fullscreen"
+                        >
+                          <FaExpand />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className={`reel-play-toggle ${isReelPaused ? "visible" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleReelPlayback(reel.id);
+                        }}
+                        title={isReelPaused ? "Play reel" : "Pause reel"}
+                      >
+                        {isReelPaused ? <FaPlay /> : <FaPause />}
+                      </button>
                       <div className="reel-overlay">
                         <div className="post-author">
                           {renderUserAvatar(reel.author, "post-avatar")}
@@ -1020,22 +1149,29 @@ const SocialFeed = () => {
                           </div>
                         </div>
                         {reel.track && (
-                          <button className="reel-song" type="button" onClick={() => playReelTrackInMainPlayer(reel)}>
+                          <button
+                            className="reel-song"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              playReelTrackInMainPlayer(reel);
+                            }}
+                          >
                             <FaMusic />
                             <span>{reel.track.title || reel.track.track_name}</span>
                           </button>
                         )}
                       </div>
                       <div className="reel-actions">
-                        <button className={reelMeta.liked ? "active" : ""} onClick={() => toggleReelLike(reel.id)} title="Like">
+                        <button className={reelMeta.liked ? "active" : ""} onClick={(event) => { event.stopPropagation(); toggleReelLike(reel.id); }} title="Like">
                           {reelMeta.liked ? <FaHeart /> : <FaRegHeart />}
                           <span>{reelMeta.likeCount}</span>
                         </button>
-                        <button onClick={() => setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] }))} title="Comment">
+                        <button onClick={(event) => { event.stopPropagation(); setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] })); }} title="Comment">
                           <FaComment />
                           <span>{reelMeta.comments.length}</span>
                         </button>
-                        <button onClick={() => openShareDialog(reel, "reel")} title="Share">
+                        <button onClick={(event) => { event.stopPropagation(); openShareDialog(reel, "reel"); }} title="Share">
                           <FaRetweet />
                           <span>Share</span>
                         </button>
@@ -1083,7 +1219,7 @@ const SocialFeed = () => {
               </div>
             </article>
             {stories.map((story, index) => (
-              <button className="story-tile story-view-button" key={story.id} onClick={() => openStoryViewer(index)} type="button">
+              <button className="story-tile story-view-button" key={story.id} onClick={() => openStoryOrReel(story, index)} type="button">
                 {story.media_type === "video" && story.media_url ? (
                   <video src={story.media_url} muted playsInline />
                 ) : story.media_url || story.image_url ? (

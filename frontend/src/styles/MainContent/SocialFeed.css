@@ -1019,6 +1019,7 @@ img.story-owner-avatar {
   align-items: center;
   aspect-ratio: 9 / 16;
   background: #000;
+  cursor: pointer;
   display: flex;
   justify-content: center;
   max-height: min(780px, calc(100vh - 190px));
@@ -1032,6 +1033,76 @@ img.story-owner-avatar {
   height: 100%;
   object-fit: contain;
   width: 100%;
+}
+
+.reel-top-controls {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  left: 16px;
+  pointer-events: none;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 5;
+}
+
+.reel-control-button,
+.reel-play-toggle {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: background var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.reel-control-button {
+  height: 42px;
+  pointer-events: auto;
+  width: 42px;
+}
+
+.reel-control-button:hover,
+.reel-play-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.04);
+}
+
+.reel-control-button svg,
+.reel-play-toggle svg {
+  fill: currentColor;
+  font-size: 17px;
+}
+
+.reel-play-toggle {
+  height: 76px;
+  left: 50%;
+  opacity: 0;
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  width: 76px;
+  z-index: 5;
+}
+
+.reel-stage:hover .reel-play-toggle,
+.reel-play-toggle.visible {
+  opacity: 1;
+}
+
+.reel-stage:hover .reel-play-toggle:hover {
+  transform: translate(-50%, -50%) scale(1.02);
+}
+
+.reel-play-toggle svg {
+  font-size: 28px;
 }
 
 .reel-overlay {
