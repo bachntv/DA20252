@@ -29,6 +29,8 @@ from models.social import (
     SocialPost,
     SocialShare,
     SocialStory,
+    SocialStoryComment,
+    SocialStoryLike,
 )
 from models.song_purchase import SongPurchase
 from routes.auth_routes import router as auth_router

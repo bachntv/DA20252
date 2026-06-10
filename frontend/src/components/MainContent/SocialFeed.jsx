@@ -89,7 +89,6 @@ const SocialFeed = () => {
   const [shareMode, setShareMode] = useState("feed");
   const [shareFriendId, setShareFriendId] = useState("");
   const [shareDraft, setShareDraft] = useState("");
-  const [reelState, setReelState] = useState({});
   const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [storyProgress, setStoryProgress] = useState(0);
   const [users, setUsers] = useState([]);
@@ -495,34 +494,35 @@ const SocialFeed = () => {
     fetchStories();
   };
 
-  const toggleReelLike = (reelId) => {
-    setReelState((current) => {
-      const reel = current[reelId] || { liked: false, likeCount: 0, comments: [] };
-      return {
-        ...current,
-        [reelId]: {
-          ...reel,
-          liked: !reel.liked,
-          likeCount: Math.max(0, reel.likeCount + (reel.liked ? -1 : 1)),
-        },
-      };
-    });
+  const updateStory = (nextStory) => {
+    setStories((current) => current.map((story) => (story.id === nextStory.id ? nextStory : story)));
   };
 
-  const addReelComment = (reelId) => {
+  const toggleReelLike = async (reelId) => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/stories/${reelId}/like`, { method: "POST" });
+      const data = await res.json();
+      if (data.story) updateStory(data.story);
+    } catch (err) {
+      console.error("Failed to like reel", err);
+    }
+  };
+
+  const addReelComment = async (reelId) => {
     const value = comments[`reel-${reelId}`]?.trim();
     if (!value) return;
-    setReelState((current) => {
-      const reel = current[reelId] || { liked: false, likeCount: 0, comments: [] };
-      return {
-        ...current,
-        [reelId]: {
-          ...reel,
-          comments: [...reel.comments, { id: `${Date.now()}`, author: username, content: value }],
-        },
-      };
-    });
-    setComments((prev) => ({ ...prev, [`reel-${reelId}`]: "" }));
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/stories/${reelId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: value }),
+      });
+      const data = await res.json();
+      if (data.story) updateStory(data.story);
+      setComments((prev) => ({ ...prev, [`reel-${reelId}`]: "" }));
+    } catch (err) {
+      console.error("Failed to comment on reel", err);
+    }
   };
 
   const toggleFollow = async (user) => {
@@ -1053,7 +1053,7 @@ const SocialFeed = () => {
               <div className="social-empty">No reels yet.</div>
             ) : (
               reels.map((reel) => {
-                const reelMeta = reelState[reel.id] || { liked: false, likeCount: 0, comments: [] };
+                const reelComments = Array.isArray(reel.comments) ? reel.comments : [];
                 const reelMediaType = reel.media_type || (reel.image_url ? "image" : null);
                 const reelMediaUrl = reel.media_url || reel.image_url;
                 const isActiveReel = String(activeReelId) === String(reel.id);
@@ -1170,13 +1170,13 @@ const SocialFeed = () => {
                         )}
                       </div>
                       <div className="reel-actions">
-                        <button className={reelMeta.liked ? "active" : ""} onClick={(event) => { event.stopPropagation(); toggleReelLike(reel.id); }} title="Like">
-                          {reelMeta.liked ? <FaHeart /> : <FaRegHeart />}
-                          <span>{reelMeta.likeCount}</span>
+                        <button className={reel.is_liked ? "active" : ""} onClick={(event) => { event.stopPropagation(); toggleReelLike(reel.id); }} title="Like">
+                          {reel.is_liked ? <FaHeart /> : <FaRegHeart />}
+                          <span>{reel.like_count || 0}</span>
                         </button>
                         <button onClick={(event) => { event.stopPropagation(); setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] })); }} title="Comment">
                           <FaComment />
-                          <span>{reelMeta.comments.length}</span>
+                          <span>{reel.comment_count || reelComments.length}</span>
                         </button>
                         <button onClick={(event) => { event.stopPropagation(); openShareDialog(reel, "reel"); }} title="Share">
                           <FaRetweet />
@@ -1186,9 +1186,9 @@ const SocialFeed = () => {
                     </div>
                     {comments[`reel-${reel.id}-open`] && (
                       <div className="reel-comments">
-                        {reelMeta.comments.map((comment) => (
+                        {reelComments.map((comment) => (
                           <div className="comment-body" key={comment.id}>
-                            <strong>{comment.author}</strong>
+                            <strong>{comment.author?.username || comment.author || "User"}</strong>
                             <span>{comment.content}</span>
                           </div>
                         ))}

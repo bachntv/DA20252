@@ -129,3 +129,23 @@ class SocialStory(Base):
     track_id = Column(String, nullable=True, index=True)
     story_type = Column(String, nullable=False, default="story", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class SocialStoryLike(Base):
+    __tablename__ = "social_story_likes"
+    __table_args__ = (UniqueConstraint("story_id", "user_id", name="uq_social_story_like_story_user"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    story_id = Column(String, ForeignKey("social_stories.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SocialStoryComment(Base):
+    __tablename__ = "social_story_comments"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    story_id = Column(String, ForeignKey("social_stories.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

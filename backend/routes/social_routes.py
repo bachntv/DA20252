@@ -22,6 +22,8 @@ from models.social import (
     SocialPost,
     SocialShare,
     SocialStory,
+    SocialStoryComment,
+    SocialStoryLike,
 )
 from models.subscription import Subscription
 from models.user import User
@@ -169,6 +171,20 @@ def ensure_friendship(db: Session, user_id: str, friend_id: str):
 def serialize_story(db: Session, story: SocialStory, current_user_id: str):
     media_url = story.media_url or story.image_url
     media_type = story.media_type or ("image" if story.image_url else None)
+    comments = (
+        db.query(SocialStoryComment, User)
+        .join(User, User.id == SocialStoryComment.user_id)
+        .filter(SocialStoryComment.story_id == story.id)
+        .order_by(SocialStoryComment.created_at.asc())
+        .limit(50)
+        .all()
+    )
+    like_count = db.query(func.count(SocialStoryLike.id)).filter(SocialStoryLike.story_id == story.id).scalar() or 0
+    comment_count = db.query(func.count(SocialStoryComment.id)).filter(SocialStoryComment.story_id == story.id).scalar() or 0
+    is_liked = db.query(SocialStoryLike).filter(
+        SocialStoryLike.story_id == story.id,
+        SocialStoryLike.user_id == current_user_id,
+    ).first() is not None
     return {
         "id": story.id,
         "content": story.content,
@@ -180,6 +196,19 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         "created_at": story.created_at.isoformat(),
         "author": user_summary(db, story.user_id),
         "is_owner": story.user_id == current_user_id,
+        "like_count": like_count,
+        "comment_count": comment_count,
+        "is_liked": is_liked,
+        "comments": [
+            {
+                "id": comment.id,
+                "content": comment.content,
+                "created_at": comment.created_at.isoformat(),
+                "author": user_public(user),
+                "is_owner": comment.user_id == current_user_id,
+            }
+            for comment, user in comments
+        ],
     }
 
 
@@ -599,6 +628,56 @@ def delete_story(story_id: str, db: Session = Depends(get_db), current_user: Use
     db.delete(story)
     db.commit()
     return {"message": "Story deleted", "story_id": story_id}
+
+
+@router.post("/stories/{story_id}/like")
+def toggle_story_like(story_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if is_blocked_between(db, current_user.id, story.user_id):
+        raise HTTPException(status_code=403, detail="You cannot interact with this reel")
+
+    existing = db.query(SocialStoryLike).filter(
+        SocialStoryLike.story_id == story_id,
+        SocialStoryLike.user_id == current_user.id,
+    ).first()
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(SocialStoryLike(story_id=story_id, user_id=current_user.id))
+        if story.user_id != current_user.id:
+            notify(db, story.user_id, "social_like", "New like", f"{current_user.username} liked your {story.story_type}.")
+
+    db.commit()
+    db.refresh(story)
+    return {"story": serialize_story(db, story, current_user.id)}
+
+
+@router.post("/stories/{story_id}/comments")
+def add_story_comment(
+    story_id: str,
+    payload: CommentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_not_muted(current_user)
+    story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if is_blocked_between(db, current_user.id, story.user_id):
+        raise HTTPException(status_code=403, detail="You cannot comment on this reel")
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Comment is required")
+
+    db.add(SocialStoryComment(story_id=story_id, user_id=current_user.id, content=content))
+    if story.user_id != current_user.id:
+        notify(db, story.user_id, "social_comment", "New comment", f"{current_user.username} commented on your {story.story_type}.")
+    db.commit()
+    db.refresh(story)
+    return {"story": serialize_story(db, story, current_user.id)}
 
 
 @router.get("/friends")
