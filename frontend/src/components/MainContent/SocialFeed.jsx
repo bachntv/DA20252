@@ -1061,7 +1061,7 @@ const SocialFeed = () => {
                 const isReelMuted = Boolean(mutedReelIds[reel.id]);
                 return (
                   <article
-                    className="reel-card"
+                    className={`reel-card ${comments[`reel-${reel.id}-open`] ? "comments-open" : ""}`}
                     data-reel-id={reel.id}
                     key={reel.id}
                     ref={(node) => {
@@ -1140,7 +1140,14 @@ const SocialFeed = () => {
                       </button>
                       <div className="reel-overlay">
                         <div className="post-author">
-                          {renderUserAvatar(reel.author, "post-avatar")}
+                          <button
+                            className="reel-avatar-button"
+                            type="button"
+                            onClick={(event) => openUserProfile(reel.author, event)}
+                            title={`Open ${reel.author.username}'s profile`}
+                          >
+                            {renderUserAvatar(reel.author, "post-avatar")}
+                          </button>
                           <div>
                             <strong className="profile-name-link" onClick={(event) => openUserProfile(reel.author, event)}>
                               {reel.author.username}

@@ -144,9 +144,12 @@
   display: none;
 }
 
-.social-page.reels-mode .social-topbar,
-.social-page.reels-mode .reels-page {
+.social-page.reels-mode .social-topbar {
   width: min(620px, calc(100vw - 48px));
+}
+
+.social-page.reels-mode .reels-page {
+  width: min(980px, calc(100vw - 48px));
 }
 
 .social-page.reels-mode .social-topbar h2 {
@@ -771,6 +774,14 @@ img.story-owner-avatar {
   color: var(--text-primary);
 }
 
+.post-actions button.active {
+  color: var(--accent-primary);
+}
+
+.post-actions button.active svg {
+  fill: currentColor;
+}
+
 .comments {
   border-top: 1px solid var(--border-light);
   padding-top: 12px;
@@ -1015,6 +1026,12 @@ img.story-owner-avatar {
   width: min(560px, 100%);
 }
 
+.reel-card.comments-open {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(280px, 340px);
+  width: min(920px, 100%);
+}
+
 .reel-stage {
   align-items: center;
   aspect-ratio: 9 / 16;
@@ -1124,6 +1141,19 @@ img.story-owner-avatar {
   width: 42px;
 }
 
+.reel-avatar-button {
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.reel-avatar-button:hover .post-avatar {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
+}
+
 .reel-overlay img.post-avatar {
   object-fit: cover;
 }
@@ -1204,6 +1234,10 @@ img.story-owner-avatar {
   color: #fff;
 }
 
+.reel-actions button.active:first-child {
+  color: var(--accent-primary);
+}
+
 .reel-actions button svg {
   fill: none;
   font-size: 22px;
@@ -1221,11 +1255,28 @@ img.story-owner-avatar {
 }
 
 .reel-comments {
-  background: rgba(255, 255, 255, 0.04);
+  background: #0b0e16;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  max-height: min(780px, calc(100vh - 190px));
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.reel-comments .comment-body {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.reel-comments .comment-body span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.reel-comments .comment-input {
+  margin-top: auto;
 }
 
 .chat-dock {
@@ -1955,5 +2006,16 @@ img.story-owner-avatar {
 
   .reel-stage {
     min-height: min(560px, calc(100vh - 190px));
+  }
+
+  .reel-card.comments-open {
+    display: block;
+    width: min(560px, 100%);
+  }
+
+  .reel-comments {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    max-height: 320px;
   }
 }
