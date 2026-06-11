@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { FaArrowLeft, FaBan, FaCamera, FaPaperPlane, FaPhotoVideo, FaPlus, FaUserCheck, FaUserPlus, FaVolumeMute } from "react-icons/fa";
+import { FaArrowLeft, FaCamera, FaChevronLeft, FaChevronRight, FaGlobeAmericas, FaLock, FaPaperPlane, FaPhotoVideo, FaPlay, FaPlus, FaUserCheck, FaUserFriends, FaUserPlus } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import "../styles/UserProfile.css";
@@ -8,13 +8,28 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
 const getInitial = (name) => (name || "U").charAt(0).toUpperCase();
 
-const UserAvatar = ({ user, className = "" }) => (
-  user?.profile_picture_url ? (
+const AUDIENCE_OPTIONS = [
+  { value: "public", label: "Public", icon: <FaGlobeAmericas /> },
+  { value: "friends", label: "Friends", icon: <FaUserFriends /> },
+  { value: "private", label: "Only me", icon: <FaLock /> },
+];
+
+const UserAvatar = ({ user, className = "", story, onStoryClick }) => {
+  const ringClass = story ? ` profile-story-ring ${story.is_seen ? "seen" : "unseen"}` : "";
+  const avatar = user?.profile_picture_url ? (
     <img className={`profile-avatar-image ${className}`} src={user.profile_picture_url} alt={user.username} />
   ) : (
     <div className={`profile-avatar-fallback ${className}`}>{getInitial(user?.username)}</div>
-  )
-);
+  );
+
+  if (!story) return avatar;
+
+  return (
+    <button className={`profile-avatar-story-button${ringClass}`} onClick={onStoryClick} title="Open story">
+      {avatar}
+    </button>
+  );
+};
 
 const UserProfile = () => {
   const { userId } = useParams();
@@ -25,11 +40,14 @@ const UserProfile = () => {
   const [uploading, setUploading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
   const [postMedia, setPostMedia] = useState(null);
+  const [postAudience, setPostAudience] = useState("public");
   const [storyDraft, setStoryDraft] = useState("");
   const [storyType, setStoryType] = useState("story");
   const [storyMedia, setStoryMedia] = useState(null);
+  const [storyAudience, setStoryAudience] = useState("public");
   const [isBannerEditorOpen, setIsBannerEditorOpen] = useState(false);
   const [activeStatList, setActiveStatList] = useState(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(null);
   const [activeProfileTab, setActiveProfileTab] = useState(() => {
     const requestedTab = new URLSearchParams(location.search).get("tab");
     return requestedTab === "message" ? "posts" : requestedTab || "posts";
@@ -65,7 +83,10 @@ const UserProfile = () => {
         body: formData,
       });
       const data = await res.json();
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+      if (data.user && data.user.id === profile?.id) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("authUser", JSON.stringify(data.user));
+      }
       setProfile((current) => current ? { ...current, profile_picture_url: data.profile_picture_url } : current);
       window.dispatchEvent(new Event("profileUpdated"));
     } catch (err) {
@@ -77,8 +98,9 @@ const UserProfile = () => {
   };
 
   const updateLocalUser = (user) => {
-    if (user) {
+    if (user && user.id === profile?.id) {
       localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("authUser", JSON.stringify(user));
       window.dispatchEvent(new Event("profileUpdated"));
     }
   };
@@ -112,15 +134,17 @@ const UserProfile = () => {
         const formData = new FormData();
         formData.append("content", postDraft);
         formData.append("media", postMedia);
+        formData.append("audience", postAudience);
         await authFetch(`${API_BASE}/api/social/posts/photo`, { method: "POST", body: formData });
       } else {
         await authFetch(`${API_BASE}/api/social/posts`, {
           method: "POST",
-          body: JSON.stringify({ content: postDraft }),
+          body: JSON.stringify({ content: postDraft, audience: postAudience }),
         });
       }
       setPostDraft("");
       setPostMedia(null);
+      setPostAudience("public");
       fetchProfile();
     } catch (err) {
       console.error("Failed to post from profile", err);
@@ -134,39 +158,31 @@ const UserProfile = () => {
       const formData = new FormData();
       formData.append("content", storyDraft);
       formData.append("story_type", storyType);
+      formData.append("audience", storyAudience);
       if (storyMedia) formData.append("media", storyMedia);
       await authFetch(`${API_BASE}/api/social/stories/photo`, { method: "POST", body: formData });
       setStoryDraft("");
       setStoryMedia(null);
       setStoryType("story");
+      setStoryAudience("public");
+      fetchProfile();
     } catch (err) {
       console.error("Failed to create story from profile", err);
     }
   };
 
-  const toggleMute = async () => {
-    if (!profile || profile.is_self) return;
+  const markProfileStorySeen = useCallback(async (story) => {
+    if (!story || story.story_type !== "story" || story.is_seen) return;
     try {
-      await authFetch(`${API_BASE}/api/social/users/${profile.id}/mute`, {
-        method: profile.is_muted ? "DELETE" : "POST",
-      });
-      fetchProfile();
+      await authFetch(`${API_BASE}/api/social/stories/${story.id}/view`, { method: "POST" });
+      setProfile((current) => current ? {
+        ...current,
+        stories: (current.stories || []).map((item) => item.id === story.id ? { ...item, is_seen: true } : item),
+      } : current);
     } catch (err) {
-      console.error("Failed to update mute state", err);
+      console.error("Failed to mark profile story as seen", err);
     }
-  };
-
-  const toggleBlock = async () => {
-    if (!profile || profile.is_self) return;
-    try {
-      await authFetch(`${API_BASE}/api/social/users/${profile.id}/block`, {
-        method: profile.is_blocked ? "DELETE" : "POST",
-      });
-      fetchProfile();
-    } catch (err) {
-      console.error("Failed to update block state", err);
-    }
-  };
+  }, []);
 
   const toggleFollow = async () => {
     if (!profile || profile.is_self) return;
@@ -187,6 +203,41 @@ const UserProfile = () => {
   if (!profile) {
     return <div className="user-profile-page"><div className="profile-empty">Profile not found.</div></div>;
   }
+
+  const profileStories = profile.stories || [];
+  const profileStoryItems = profileStories.filter((item) => item.story_type === "story");
+  const profileReelItems = profileStories.filter((item) => item.story_type === "reel");
+  const storyRingItem = profileStoryItems.find((item) => !item.is_seen) || profileStoryItems[0];
+  const activeStory = activeStoryIndex !== null ? profileStories[activeStoryIndex] : null;
+
+  const openProfileStory = (story) => {
+    const index = profileStories.findIndex((item) => item.id === story.id);
+    if (index >= 0) {
+      setActiveStoryIndex(index);
+      markProfileStorySeen(profileStories[index]);
+    }
+  };
+
+  const moveProfileStory = (direction) => {
+    setActiveStoryIndex((current) => {
+      if (current === null || profileStories.length === 0) return current;
+      const next = (current + direction + profileStories.length) % profileStories.length;
+      markProfileStorySeen(profileStories[next]);
+      return next;
+    });
+  };
+
+  const renderStoryMedia = (story) => {
+    if (!story) return null;
+    const mediaUrl = story.media_url || story.image_url;
+    if (!mediaUrl) {
+      return <div className="profile-story-text-only">{story.content || "Story"}</div>;
+    }
+    if (story.media_type === "video") {
+      return <video src={mediaUrl} controls autoPlay={story.story_type === "story"} />;
+    }
+    return <img src={mediaUrl} alt={story.story_type === "reel" ? "Profile reel" : "Profile story"} />;
+  };
 
   const statItems = [
     { key: "posts", label: "Posts", value: profile.stats.posts },
@@ -277,7 +328,7 @@ const UserProfile = () => {
         </div>
         <div className="profile-main-row">
           <div className="profile-avatar-wrap">
-            <UserAvatar user={profile} />
+            <UserAvatar user={profile} story={storyRingItem} onStoryClick={() => openProfileStory(storyRingItem)} />
             {profile.is_self && (
               <label className="profile-picture-button" title="Change profile picture">
                 <FaCamera />
@@ -295,16 +346,41 @@ const UserProfile = () => {
                 {profile.is_following ? <FaUserCheck /> : <FaUserPlus />}
                 {profile.is_following ? "Following" : "Follow"}
               </button>
-              <button className="profile-follow-button" onClick={toggleMute}>
-                <FaVolumeMute /> {profile.is_muted ? "Unmute" : "Mute"}
-              </button>
-              <button className="profile-follow-button danger" onClick={toggleBlock}>
-                <FaBan /> {profile.is_blocked ? "Unblock" : "Block"}
-              </button>
             </div>
           )}
         </div>
       </section>
+
+      {(profileStoryItems.length > 0 || profileReelItems.length > 0) && (
+        <section className="profile-media-strip">
+          {profileStoryItems.length > 0 && (
+            <div className="profile-media-group">
+              <h2>Stories</h2>
+              <div className="profile-media-row">
+                {profileStoryItems.map((story) => (
+                  <button className={`profile-media-card ${story.is_seen ? "seen" : "unseen"}`} key={story.id} onClick={() => openProfileStory(story)}>
+                    <span>{renderStoryMedia(story)}</span>
+                    <strong>{story.content || "Story"}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {profileReelItems.length > 0 && (
+            <div className="profile-media-group">
+              <h2>Reels</h2>
+              <div className="profile-media-row">
+                {profileReelItems.map((reel) => (
+                  <button className="profile-media-card reel" key={reel.id} onClick={() => openProfileStory(reel)}>
+                    <span>{renderStoryMedia(reel)}<i><FaPlay /></i></span>
+                    <strong>{reel.content || "Reel"}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="profile-tabs">
         <button className={activeProfileTab === "posts" ? "active" : ""} onClick={() => setActiveProfileTab("posts")}>Posts</button>
@@ -323,6 +399,9 @@ const UserProfile = () => {
           <div className="profile-composer-card">
             <h2>Create post</h2>
             <textarea value={postDraft} onChange={(event) => setPostDraft(event.target.value)} placeholder="What's on your mind?" />
+            <select className="profile-audience-select" value={postAudience} onChange={(event) => setPostAudience(event.target.value)}>
+              {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
             <div className="profile-tool-actions">
               <label><FaPhotoVideo /> Photo/video<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => setPostMedia(event.target.files?.[0] || null)} /></label>
               <button onClick={createProfilePost}><FaPaperPlane /> Post</button>
@@ -335,6 +414,9 @@ const UserProfile = () => {
               <button className={storyType === "story" ? "active" : ""} onClick={() => setStoryType("story")}>Story</button>
               <button className={storyType === "reel" ? "active" : ""} onClick={() => setStoryType("reel")}>Reel</button>
             </div>
+            <select className="profile-audience-select" value={storyAudience} onChange={(event) => setStoryAudience(event.target.value)}>
+              {AUDIENCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
             <div className="profile-tool-actions">
               <label><FaPlus /> Media<input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={(event) => setStoryMedia(event.target.files?.[0] || null)} /></label>
               <button onClick={createProfileStory}><FaPaperPlane /> Share</button>
@@ -414,6 +496,35 @@ const UserProfile = () => {
                 activeListItems.map(renderStatListItem)
               )}
             </div>
+          </div>
+        </section>
+      )}
+
+      {activeStory && (
+        <section
+          className="profile-story-viewer-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActiveStoryIndex(null);
+          }}
+        >
+          <div className="profile-story-viewer">
+            <header>
+              <div>
+                <strong>{activeStory.story_type === "reel" ? "Reel" : "Story"}</strong>
+                <span>{new Date(activeStory.created_at).toLocaleString()}</span>
+              </div>
+              <button onClick={() => setActiveStoryIndex(null)}>Close</button>
+            </header>
+            <div className="profile-story-viewer-media">
+              {renderStoryMedia(activeStory)}
+            </div>
+            {activeStory.content && <p>{activeStory.content}</p>}
+            {profileStories.length > 1 && (
+              <>
+                <button className="profile-story-nav previous" onClick={() => moveProfileStory(-1)}><FaChevronLeft /></button>
+                <button className="profile-story-nav next" onClick={() => moveProfileStory(1)}><FaChevronRight /></button>
+              </>
+            )}
           </div>
         </section>
       )}

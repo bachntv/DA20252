@@ -2,6 +2,7 @@ import os
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 from jose import jwt, JWTError
@@ -16,6 +17,7 @@ from models.playlist_tracks import PlaylistTracks
 from models.playlist_user import PlaylistUser
 from models.song import Song
 from models.song_purchase import SongPurchase
+from models.social import SocialBlock, SocialFollow, SocialFriendship, SocialMute, SocialPost, SocialStory, SocialStoryView
 from schemas.user import UserUpdate
 from schemas.billing import BillingOverview, PlanResponse, SubscriptionSummary, PaymentResponse, SubscribeRequest, PaymentActionRequest
 from .auth_routes import get_current_user
@@ -96,6 +98,25 @@ def serialize_public_profile_user(user: Optional[User]):
         "profile_picture_url": user.profile_picture_url,
         "roles": user.roles,
     }
+
+
+def users_are_friends(db: Session, user_id: str, friend_id: str) -> bool:
+    if user_id == friend_id:
+        return True
+    return db.query(SocialFriendship).filter(
+        SocialFriendship.user_id == user_id,
+        SocialFriendship.friend_id == friend_id,
+    ).first() is not None
+
+
+def can_view_profile_audience(db: Session, owner_id: str, viewer_id: str, audience: Optional[str]) -> bool:
+    if owner_id == viewer_id:
+        return True
+    if audience == "private":
+        return False
+    if audience == "friends":
+        return users_are_friends(db, owner_id, viewer_id)
+    return True
 
 # Get current user profile
 @router.get("/me", response_model=UserUpdate)
@@ -210,8 +231,6 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    from models.social import SocialBlock, SocialFollow, SocialFriendship, SocialMute, SocialPost
-
     post_count = db.query(SocialPost).filter(SocialPost.user_id == user.id).count()
     follower_count = db.query(SocialFollow).filter(SocialFollow.following_id == user.id).count()
     following_count = db.query(SocialFollow).filter(SocialFollow.follower_id == user.id).count()
@@ -234,13 +253,36 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
         .all()
     )
 
-    recent_posts = (
-        db.query(SocialPost)
-        .filter(SocialPost.user_id == user.id)
-        .order_by(SocialPost.created_at.desc())
-        .limit(10)
+    recent_posts = [
+        post for post in (
+            db.query(SocialPost)
+            .filter(SocialPost.user_id == user.id)
+            .order_by(SocialPost.created_at.desc())
+            .limit(30)
+            .all()
+        )
+        if can_view_profile_audience(db, user.id, current_user.id, post.audience)
+    ][:10]
+    active_story_cutoff = datetime.utcnow() - timedelta(hours=24)
+    profile_story_rows = [
+        story for story in (
+            db.query(SocialStory)
+            .filter(
+                SocialStory.user_id == user.id,
+                or_(SocialStory.story_type == "reel", SocialStory.created_at >= active_story_cutoff),
+            )
+            .order_by(SocialStory.created_at.desc())
+            .limit(40)
+            .all()
+        )
+        if can_view_profile_audience(db, user.id, current_user.id, story.audience)
+    ]
+    viewed_story_ids = {
+        row.story_id
+        for row in db.query(SocialStoryView)
+        .filter(SocialStoryView.user_id == current_user.id)
         .all()
-    )
+    }
     follower_users = (
         db.query(User)
         .join(SocialFollow, SocialFollow.follower_id == User.id)
@@ -293,8 +335,25 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
             "image_url": post.image_url,
             "media_url": post.media_url or post.image_url,
             "media_type": post.media_type or ("image" if post.image_url else None),
+            "audience": post.audience,
         }
         for post in recent_posts
+    ]
+    serialized_stories = [
+        {
+            "id": story.id,
+            "content": story.content,
+            "created_at": story.created_at.isoformat(),
+            "image_url": story.image_url,
+            "media_url": story.media_url or story.image_url,
+            "media_type": story.media_type or ("image" if story.image_url else None),
+            "story_type": story.story_type,
+            "audience": story.audience,
+            "is_owner": story.user_id == current_user.id,
+            "is_seen": story.user_id == current_user.id or story.id in viewed_story_ids,
+            "author": serialize_public_profile_user(user),
+        }
+        for story in profile_story_rows
     ]
 
     return {
@@ -319,6 +378,7 @@ def get_public_profile(user_id: str, db: Session = Depends(get_db), current_user
         "has_blocked_you": has_blocked_you,
         "playlists": serialized_playlists,
         "recent_posts": serialized_posts,
+        "stories": serialized_stories,
         "profile_lists": {
             "posts": serialized_posts,
             "playlists": serialized_playlists,

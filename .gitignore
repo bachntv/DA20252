@@ -29,9 +29,6 @@ coverage/
 
 # Sensitive files
 gcs_key.json
-airflow/cookies.txt
-
-/airflow
 /music-recommender
 backend/cookies.txt
 .vercel

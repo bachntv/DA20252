@@ -21,6 +21,7 @@ class SocialPost(Base):
     media_url = Column(String, nullable=True)
     media_type = Column(String, nullable=False, default="image")
     shared_post_id = Column(String, nullable=True, index=True)
+    audience = Column(String, nullable=False, default="public", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -95,6 +96,8 @@ class SocialMessage(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     read_at = Column(DateTime, nullable=True)
+    deleted_by_sender = Column(Boolean, nullable=False, default=False)
+    deleted_by_recipient = Column(Boolean, nullable=False, default=False)
 
 
 class SocialBlock(Base):
@@ -128,7 +131,18 @@ class SocialStory(Base):
     media_type = Column(String, nullable=False, default="image")
     track_id = Column(String, nullable=True, index=True)
     story_type = Column(String, nullable=False, default="story", index=True)
+    audience = Column(String, nullable=False, default="public", index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class SocialStoryView(Base):
+    __tablename__ = "social_story_views"
+    __table_args__ = (UniqueConstraint("story_id", "user_id", name="uq_social_story_view_story_user"),)
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    story_id = Column(String, ForeignKey("social_stories.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class SocialStoryLike(Base):

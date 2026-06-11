@@ -56,6 +56,11 @@ export const authFetch = async (url, options = {}) => {
       // Refresh successful, store new token
       const data = await refreshRes.json();
       localStorage.setItem("token", data.access_token);
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("authUser", JSON.stringify(data.user));
+        window.dispatchEvent(new Event("profileUpdated"));
+      }
       console.log("Token refreshed successfully");
 
       // Retry the original request with the new token

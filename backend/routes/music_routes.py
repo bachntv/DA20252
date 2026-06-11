@@ -354,11 +354,19 @@ def get_artist_uploads(
 ):
     rows = db.execute(text("""
         SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
-               s.track_genre, s.approval_status, s.is_active, s.track_image_url, s.audio_url
+               s.track_genre, s.approval_status, s.is_active, s.track_image_url, s.audio_url,
+               s.rejection_reason, s.lyrics,
+               COUNT(DISTINCT lh.id) AS play_count,
+               COUNT(DISTINCT sp.id) AS purchase_count
         FROM songs s
         JOIN artists at ON at.id = s.artist_id
         JOIN albums ab ON ab.id = s.album_id
+        LEFT JOIN listening_history lh ON lh.track_id = s.track_id
+        LEFT JOIN song_purchases sp ON sp.track_id = s.track_id
         WHERE s.uploaded_by_user_id = :user_id
+        GROUP BY s.track_id, s.track_name, at.name, ab.name, s.track_genre,
+                 s.approval_status, s.is_active, s.track_image_url, s.audio_url,
+                 s.rejection_reason, s.lyrics
         ORDER BY s.track_name ASC
     """), {"user_id": current_user.id}).fetchall()
 
@@ -373,9 +381,42 @@ def get_artist_uploads(
             "is_active": row[6],
             "cover_url": row[7],
             "audio_url": row[8],
+            "rejection_reason": row[9],
+            "lyrics": row[10] or "",
+            "play_count": row[11] or 0,
+            "purchase_count": row[12] or 0,
         }
         for row in rows
     ]
+
+
+@router.get("/artist/stats")
+def get_artist_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_artist_user),
+):
+    row = db.execute(text("""
+        SELECT
+          COUNT(DISTINCT s.track_id) AS uploaded_songs,
+          COUNT(DISTINCT s.track_id) FILTER (WHERE s.approval_status = 'pending') AS pending_songs,
+          COUNT(DISTINCT s.track_id) FILTER (WHERE s.approval_status = 'approved') AS approved_songs,
+          COUNT(DISTINCT s.track_id) FILTER (WHERE s.approval_status = 'rejected') AS rejected_songs,
+          COUNT(DISTINCT lh.id) AS play_count,
+          COUNT(DISTINCT sp.id) AS purchase_count
+        FROM songs s
+        LEFT JOIN listening_history lh ON lh.track_id = s.track_id
+        LEFT JOIN song_purchases sp ON sp.track_id = s.track_id
+        WHERE s.uploaded_by_user_id = :user_id
+    """), {"user_id": current_user.id}).fetchone()
+
+    return {
+        "uploaded_songs": row[0] or 0,
+        "pending_songs": row[1] or 0,
+        "approved_songs": row[2] or 0,
+        "rejected_songs": row[3] or 0,
+        "play_count": row[4] or 0,
+        "purchase_count": row[5] or 0,
+    }
 
 
 @router.post("/artist/uploads")
@@ -456,6 +497,7 @@ async def upload_artist_song(
         audio_url=audio_url,
         approval_status="pending",
         uploaded_by_user_id=current_user.id,
+        rejection_reason=None,
     )
     db.add(album)
     db.add(AlbumArtist(album_id=album.id, artist_id=artist.id))
@@ -488,10 +530,86 @@ async def upload_artist_song(
     }
 
 
+@router.put("/artist/uploads/{track_id}")
+async def resubmit_artist_song(
+    request: Request,
+    track_id: str,
+    title: str = Form(...),
+    artist_name: str = Form(...),
+    album_name: str = Form("Singles"),
+    genre: str = Form("independent"),
+    lyrics: str = Form(""),
+    audio_file: UploadFile = File(None),
+    cover_image: UploadFile = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_artist_user),
+):
+    song = db.query(Song).filter(
+        Song.track_id == track_id,
+        Song.uploaded_by_user_id == current_user.id,
+    ).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Uploaded song not found")
+    if song.approval_status != "rejected":
+        raise HTTPException(status_code=400, detail="Only rejected songs can be edited and resubmitted")
+
+    clean_title = title.strip()
+    clean_artist = artist_name.strip()
+    clean_album = album_name.strip() or "Singles"
+    clean_genre = genre.strip() or "independent"
+    if not clean_title or not clean_artist:
+        raise HTTPException(status_code=400, detail="Title and artist name are required")
+
+    artist = db.query(Artist).filter(Artist.id == song.artist_id).first()
+    album = db.query(Album).filter(Album.id == song.album_id).first()
+    if artist:
+        artist.name = clean_artist
+    if album:
+        album.name = clean_album
+
+    cover_url = None
+    if cover_image and cover_image.filename:
+        cover_url = await save_artist_upload(cover_image, request, "artist_covers", ARTIST_IMAGE_TYPES, MAX_ARTIST_IMAGE_BYTES)
+        song.track_image_url = cover_url
+        if artist:
+            artist.image_url = cover_url
+        if album:
+            album.image_url = cover_url
+    if audio_file and audio_file.filename:
+        song.audio_url = await save_artist_upload(audio_file, request, "artist_songs", ARTIST_AUDIO_TYPES, MAX_ARTIST_AUDIO_BYTES)
+
+    song.track_name = clean_title
+    song.track_genre = clean_genre
+    song.lyrics = lyrics
+    song.approval_status = "pending"
+    song.is_active = False
+    song.rejection_reason = None
+
+    log_activity(db, current_user.id, "artist_resubmit_song", "track", track_id, f"Resubmitted song: {clean_title}")
+    for admin in get_users_with_role(db, "admin"):
+        log_notification(
+            db,
+            user_id=admin.id,
+            event_type="artist_song_resubmitted",
+            title="Song resubmitted",
+            message=f"{current_user.username} edited and resubmitted \"{clean_title}\".",
+        )
+    log_notification(
+        db,
+        user_id=current_user.id,
+        event_type="artist_song_resubmitted",
+        title="Song resubmitted",
+        message=f"\"{clean_title}\" was sent back for admin approval.",
+    )
+    db.commit()
+    return {"id": track_id, "approval_status": "pending", "message": "Song updated and sent back for approval"}
+
+
 @router.post("/artist/uploads/{track_id}/approval")
 def update_artist_upload_approval(
     track_id: str,
     status: str = Body(..., embed=True),
+    rejection_reason: str = Body("", embed=True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
@@ -504,22 +622,33 @@ def update_artist_upload_approval(
 
     song.approval_status = status
     song.is_active = status == "approved"
-    log_activity(db, current_user.id, f"artist_upload_{status}", "track", track_id, f"Set upload status to {status}")
+    clean_reason = rejection_reason.strip() if rejection_reason else ""
+    song.rejection_reason = clean_reason if status == "rejected" else None
+    log_details = f"Set upload status to {status}"
+    if status == "rejected" and clean_reason:
+        log_details = f"{log_details}: {clean_reason}"
+    log_activity(db, current_user.id, f"artist_upload_{status}", "track", track_id, log_details)
     if song.uploaded_by_user_id:
         status_label = {
             "approved": "approved and published",
             "rejected": "rejected",
             "pending": "moved back to pending review",
         }[status]
+        reason_text = f" Reason: {clean_reason}" if status == "rejected" and clean_reason else ""
         log_notification(
             db,
             user_id=song.uploaded_by_user_id,
             event_type=f"artist_song_{status}",
             title="Song review updated",
-            message=f"\"{song.track_name}\" was {status_label}.",
+            message=f"\"{song.track_name}\" was {status_label}.{reason_text}",
         )
     db.commit()
-    return {"id": track_id, "approval_status": song.approval_status, "is_active": song.is_active}
+    return {
+        "id": track_id,
+        "approval_status": song.approval_status,
+        "is_active": song.is_active,
+        "rejection_reason": song.rejection_reason,
+    }
 
 
 @router.get("/admin/songs")
@@ -537,7 +666,8 @@ def get_admin_songs(
     rows = db.execute(text(f"""
         SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
                s.track_genre, COALESCE(s.approval_status, 'approved') AS approval_status,
-               s.is_active, s.track_image_url, s.audio_url, u.username AS uploaded_by
+               s.is_active, s.track_image_url, s.audio_url, u.username AS uploaded_by,
+               s.rejection_reason
         FROM songs s
         JOIN artists at ON at.id = s.artist_id
         JOIN albums ab ON ab.id = s.album_id
@@ -561,6 +691,7 @@ def get_admin_songs(
             "cover_url": row[7],
             "audio_url": row[8],
             "uploaded_by": row[9],
+            "rejection_reason": row[10],
             "source": "artist_upload" if row[8] else "catalog",
         }
         for row in rows

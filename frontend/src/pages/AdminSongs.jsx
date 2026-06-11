@@ -6,6 +6,13 @@ import "../styles/MainContent/AdminSongs.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
+const STATUS_LABELS = {
+  all: "All",
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
 const AdminSongs = () => {
   const navigate = useNavigate();
   const [songs, setSongs] = useState([]);
@@ -31,10 +38,16 @@ const AdminSongs = () => {
   }, [statusFilter]);
 
   const reviewSong = async (trackId, status) => {
+    let rejectionReason = "";
+    if (status === "rejected") {
+      rejectionReason = window.prompt("Tell the artist what needs to change before resubmitting.") || "";
+      if (!rejectionReason.trim()) return;
+    }
+
     await authFetch(`${API_BASE}/api/music/artist/uploads/${trackId}/approval`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, rejection_reason: rejectionReason }),
     });
     fetchSongs();
   };
@@ -67,7 +80,7 @@ const AdminSongs = () => {
               className={statusFilter === status ? "active" : ""}
               onClick={() => setStatusFilter(status)}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {STATUS_LABELS[status]}
             </button>
           ))}
         </div>
@@ -91,9 +104,10 @@ const AdminSongs = () => {
               </div>
               <div className="admin-song-state">
                 <span className={`admin-song-pill admin-song-pill--${song.approval_status}`}>
-                  {song.approval_status}
+                  {STATUS_LABELS[song.approval_status] || "Pending"}
                 </span>
                 <small>{song.is_active ? "Visible" : "Hidden"}</small>
+                {song.rejection_reason && <small className="admin-song-reason">{song.rejection_reason}</small>}
               </div>
               <div className="admin-song-actions">
                 <button type="button" onClick={() => reviewSong(song.id, "approved")} title="Approve song">

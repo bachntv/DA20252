@@ -51,6 +51,43 @@ const formatTableName = (name) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const FIELD_LABELS = {
+  approval_status: "Approval",
+  is_active: "Visibility",
+  track_id: "Song",
+  track_name: "Song Title",
+  artist_id: "Artist",
+  album_id: "Album",
+  uploaded_by_user_id: "Uploaded By",
+  rejection_reason: "Rejection Reason",
+  audio_url: "Audio File",
+  track_image_url: "Cover Image",
+  account_type: "Account Type",
+  is_muted: "Posting",
+  user_id: "User",
+};
+
+const VALUE_LABELS = {
+  approval_status: {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+  },
+  account_type: {
+    free: "Free",
+    premium: "Premium",
+  },
+};
+
+const formatColumnLabel = (name) => FIELD_LABELS[name] || formatTableName(name);
+
+const formatFriendlyValue = (columnName, value) => {
+  if (value == null || value === "") return "";
+  if (columnName === "is_active") return value ? "Visible" : "Hidden";
+  if (columnName === "is_muted") return value ? "Muted" : "Can post";
+  return VALUE_LABELS[columnName]?.[value] || value;
+};
+
 const categorizeTables = (tableNames) => {
   const groups = TABLE_CATEGORY_RULES.map((rule) => ({ title: rule.title, keywords: rule.keywords, items: [] }));
   const otherGroup = { title: "System Tables", items: [] };
@@ -414,18 +451,6 @@ const AdminCrud = () => {
     notificationSearch,
   ]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this row?")) return;
-
-    await authFetch(`${API_BASE}/api/database/tables/${selectedTable}/${id}`, {
-      method: "DELETE",
-      headers: authHeaders,
-    });
-
-    loadTableData();
-    loadOverview();
-  };
-
   const handleQuickToggleStatus = async (row) => {
     if (!primaryKey || typeof row.is_active !== "boolean") return;
 
@@ -506,13 +531,19 @@ const AdminCrud = () => {
   };
 
   const handleUploadApproval = async (trackId, status) => {
+    let rejectionReason = "";
+    if (status === "rejected") {
+      rejectionReason = window.prompt("Tell the artist what needs to change before resubmitting.") || "";
+      if (!rejectionReason.trim()) return;
+    }
+
     await authFetch(`${API_BASE}/api/music/artist/uploads/${trackId}/approval`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...authHeaders,
       },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, rejection_reason: rejectionReason }),
     });
 
     loadTableData();
@@ -533,22 +564,41 @@ const AdminCrud = () => {
       return (
         <input
           className="crud-cell-input read-only"
-          value={inputValue}
+          value={formatFriendlyValue(col.name, inputValue)}
           readOnly
           title="Database-generated field"
         />
       );
     }
 
+    if (col.name === "approval_status") {
+      return (
+        <select
+          className="crud-cell-input"
+          value={value || "pending"}
+          onChange={(e) => handleEditableFieldChange(rowKey, col.name, e.target.value)}
+        >
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      );
+    }
+
     if (type.includes("boolean")) {
+      const labels = col.name === "is_active"
+        ? ["Visible", "Hidden"]
+        : col.name === "is_muted"
+          ? ["Muted", "Can post"]
+          : ["Yes", "No"];
       return (
         <select
           className="crud-cell-input"
           value={String(Boolean(value))}
           onChange={(e) => handleEditableFieldChange(rowKey, col.name, e.target.value === "true")}
         >
-          <option value="true">true</option>
-          <option value="false">false</option>
+          <option value="true">{labels[0]}</option>
+          <option value="false">{labels[1]}</option>
         </select>
       );
     }
@@ -1379,7 +1429,7 @@ const AdminCrud = () => {
           <thead>
             <tr>
               {schema.map((col) => (
-                <th key={col.name}>{col.name}</th>
+                <th key={col.name}>{formatColumnLabel(col.name)}</th>
               ))}
               {supportsQuickStatusToggle && <th>Status</th>}
               <th>Actions</th>
@@ -1430,7 +1480,6 @@ const AdminCrud = () => {
                         <button onClick={() => handleUploadApproval(row[primaryKey], "rejected")}>Reject</button>
                       </>
                     )}
-                    <button onClick={() => handleDelete(row[primaryKey])}>Delete</button>
                   </td>
                 </tr>
               );

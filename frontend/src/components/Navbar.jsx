@@ -14,6 +14,8 @@ import {
   FaPen,
   FaSearch,
   FaTimes,
+  FaTrash,
+  FaVolumeMute,
   FaVolumeUp,
   FaUsers,
 } from "react-icons/fa";
@@ -22,6 +24,24 @@ import { jwtDecode } from "jwt-decode";
 import { authFetch } from "../utils/authFetch";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
+const CHAT_PREFS_KEY = "chatPreferences";
+
+const loadChatPrefs = () => {
+  try {
+    return {
+      messageSounds: true,
+      popupMessages: true,
+      activeStatus: true,
+      ...(JSON.parse(localStorage.getItem(CHAT_PREFS_KEY) || "{}")),
+    };
+  } catch (err) {
+    return {
+      messageSounds: true,
+      popupMessages: true,
+      activeStatus: true,
+    };
+  }
+};
 
 const Navbar = ({ username, profilePicture, userId }) => {
   const location = useLocation();
@@ -41,11 +61,9 @@ const Navbar = ({ username, profilePicture, userId }) => {
   const [activeChatUser, setActiveChatUser] = useState(null);
   const [conversation, setConversation] = useState([]);
   const [chatDraft, setChatDraft] = useState("");
-  const [chatPrefs, setChatPrefs] = useState({
-    messageSounds: true,
-    popupMessages: true,
-    activeStatus: true,
-  });
+  const [showConversationSettings, setShowConversationSettings] = useState(false);
+  const [chatPrefs, setChatPrefs] = useState(loadChatPrefs);
+  const [chatPopup, setChatPopup] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchType, setSearchType] = useState("Track");
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,6 +74,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
   const chatRef = useRef();
   const dropdownRef = useRef();
   const debounceRef = useRef(null);
+  const previousUnreadRef = useRef(null);
   const navigate = useNavigate();
 
   const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "";
@@ -77,6 +96,10 @@ const Navbar = ({ username, profilePicture, userId }) => {
       setSearchTerm("");
     }
   }, [location]);
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_PREFS_KEY, JSON.stringify(chatPrefs));
+  }, [chatPrefs]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -109,6 +132,8 @@ const Navbar = ({ username, profilePicture, userId }) => {
     localStorage.removeItem("token");
     localStorage.removeItem("userId");
     localStorage.removeItem("user");
+    localStorage.removeItem("authUser");
+    window.dispatchEvent(new Event("authUpdated"));
     fetch(`${API_BASE}/api/auth/logout`, {
       method: "POST",
       credentials: "include",
@@ -209,8 +234,12 @@ const Navbar = ({ username, profilePicture, userId }) => {
     fetchNotifications();
     fetchThreads();
     fetchFriends();
-    const timer = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(timer);
+    const notificationTimer = setInterval(fetchNotifications, 60000);
+    const threadTimer = setInterval(fetchThreads, 15000);
+    return () => {
+      clearInterval(notificationTimer);
+      clearInterval(threadTimer);
+    };
   }, [fetchFriends, fetchNotifications, fetchThreads, isAuthenticated]);
 
   useEffect(() => {
@@ -218,6 +247,56 @@ const Navbar = ({ username, profilePicture, userId }) => {
     const timer = setTimeout(fetchPeople, 250);
     return () => clearTimeout(timer);
   }, [fetchPeople, showNewMessage]);
+
+  const playMessageSound = useCallback(() => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(720, context.currentTime);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.24);
+    } catch (err) {
+      console.error("Failed to play message sound", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const unreadTotal = threads.reduce((sum, thread) => sum + (thread.unread_count || 0), 0);
+    if (previousUnreadRef.current === null) {
+      previousUnreadRef.current = unreadTotal;
+      return;
+    }
+
+    if (unreadTotal > previousUnreadRef.current) {
+      const newThread = threads.find((thread) => (thread.unread_count || 0) > 0);
+      const isActiveThread = activeChatUser?.id && newThread?.user?.id === activeChatUser.id;
+      if (!isActiveThread && chatPrefs.messageSounds) {
+        playMessageSound();
+      }
+      if (!isActiveThread && chatPrefs.popupMessages && newThread) {
+        setChatPopup({
+          user: newThread.user,
+          content: newThread.latest_message?.content || "New message",
+        });
+      }
+    }
+    previousUnreadRef.current = unreadTotal;
+  }, [activeChatUser?.id, chatPrefs.messageSounds, chatPrefs.popupMessages, playMessageSound, threads]);
+
+  useEffect(() => {
+    if (!chatPopup) return;
+    const timer = setTimeout(() => setChatPopup(null), 6000);
+    return () => clearTimeout(timer);
+  }, [chatPopup]);
 
   const openNotifications = async () => {
     if (!isAuthenticated) {
@@ -257,10 +336,12 @@ const Navbar = ({ username, profilePicture, userId }) => {
   const openConversation = async (targetUser) => {
     if (!targetUser?.id) return;
     setActiveChatUser(targetUser);
+    setShowConversationSettings(false);
     setShowNewMessage(false);
     try {
       const res = await authFetch(`${API_BASE}/api/social/messages/${targetUser.id}`);
       const data = await res.json();
+      if (data.user) setActiveChatUser(data.user);
       setConversation(data.messages || []);
       fetchThreads();
     } catch (err) {
@@ -270,7 +351,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
 
   const sendMessage = async () => {
     const value = chatDraft.trim();
-    if (!value || !activeChatUser?.id) return;
+    if (!value || !activeChatUser?.id || activeChatUser.is_blocked) return;
 
     try {
       const res = await authFetch(`${API_BASE}/api/social/messages/${activeChatUser.id}`, {
@@ -312,8 +393,57 @@ const Navbar = ({ username, profilePicture, userId }) => {
     if (!query) return true;
     return `${row.user?.username || ""} ${row.latestMessage?.content || ""}`.toLowerCase().includes(query);
   });
+  const getChatStatusText = (chatUser) => {
+    if (chatUser?.is_blocked) return "Blocked";
+    if (chatUser?.is_muted) return "Muted conversation";
+    return chatPrefs.activeStatus ? "Active status on" : "Active status off";
+  };
   const toggleChatPref = (key) => {
     setChatPrefs((current) => ({ ...current, [key]: !current[key] }));
+  };
+  const toggleConversationMute = async () => {
+    if (!activeChatUser?.id) return;
+    const nextMuted = !activeChatUser.is_muted;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${activeChatUser.id}/mute`, {
+        method: nextMuted ? "POST" : "DELETE",
+      });
+      setActiveChatUser((current) => current ? { ...current, is_muted: nextMuted } : current);
+    } catch (err) {
+      console.error("Failed to update chat mute state", err);
+    }
+  };
+  const toggleConversationBlock = async () => {
+    if (!activeChatUser?.id) return;
+    const nextBlocked = !activeChatUser.is_blocked;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${activeChatUser.id}/block`, {
+        method: nextBlocked ? "POST" : "DELETE",
+      });
+      setActiveChatUser((current) => current ? { ...current, is_blocked: nextBlocked } : current);
+      if (nextBlocked) {
+        setConversation([]);
+        setChatDraft("");
+      }
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to update chat block state", err);
+    }
+  };
+  const deleteConversation = async () => {
+    if (!activeChatUser?.id) return;
+    const confirmed = window.confirm(`Delete chat with ${activeChatUser.username}? This only removes it from your inbox.`);
+    if (!confirmed) return;
+    try {
+      await authFetch(`${API_BASE}/api/social/messages/${activeChatUser.id}`, { method: "DELETE" });
+      setConversation([]);
+      setChatDraft("");
+      setShowConversationSettings(false);
+      setActiveChatUser(null);
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to delete chat", err);
+    }
   };
 
   return (
@@ -418,6 +548,26 @@ const Navbar = ({ username, profilePicture, userId }) => {
             <FaCommentDots />
             {threads.some((thread) => thread.unread_count > 0) && <span className="notification-dot" />}
           </button>
+          {chatPopup && (
+            <button
+              type="button"
+              className="chat-popup-toast"
+              onClick={() => {
+                openConversation(chatPopup.user);
+                setChatPopup(null);
+              }}
+            >
+              {chatPopup.user?.profile_picture_url ? (
+                <img src={chatPopup.user.profile_picture_url} alt={chatPopup.user.username} />
+              ) : (
+                <span>{getInitial(chatPopup.user?.username)}</span>
+              )}
+              <div>
+                <strong>{chatPopup.user?.username || "New message"}</strong>
+                <small>{chatPopup.content}</small>
+              </div>
+            </button>
+          )}
           <div className={`chat-menu ${showChat ? "show" : ""}`}>
             <div className="chat-menu-header">
               <h3>Chat</h3>
@@ -463,9 +613,9 @@ const Navbar = ({ username, profilePicture, userId }) => {
                   <span><FaUsers /> Active status</span>
                   <b className={chatPrefs.activeStatus ? "on" : ""}>{chatPrefs.activeStatus ? "On" : "Off"}</b>
                 </button>
-                <button className="chat-setting-row" type="button" onClick={() => navigate(userId ? `/profile/${userId}` : "/social")}>
-                  <span><FaBan /> Block settings</span>
-                  <small>Manage muted and blocked people</small>
+                <button className="chat-setting-row" type="button" disabled>
+                  <span><FaBan /> Chat safety</span>
+                  <small>Open a conversation to mute or block someone</small>
                 </button>
               </div>
             )}
@@ -514,7 +664,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
                 <p className="chat-empty">{chatSearch.trim() ? "No matching chats." : "No messages yet."}</p>
               ) : (
                 filteredChatRows.map((row) => (
-                  <button className="chat-thread-row" key={`${row.type}-${row.user.id}`} onClick={() => openConversation(row.user)}>
+                  <button className={`chat-thread-row ${chatPrefs.activeStatus ? "active-status-enabled" : ""}`} key={`${row.type}-${row.user.id}`} onClick={() => openConversation(row.user)}>
                     {row.user.profile_picture_url ? (
                       <img src={row.user.profile_picture_url} alt={row.user.username} />
                     ) : (
@@ -535,12 +685,33 @@ const Navbar = ({ username, profilePicture, userId }) => {
               <div className="nav-chat-header">
                 <div>
                   <strong>{activeChatUser.username}</strong>
-                  <span>Messenger</span>
+                  <span>{getChatStatusText(activeChatUser)}</span>
                 </div>
-                <button type="button" onClick={() => setActiveChatUser(null)}><FaTimes /></button>
+                <div className="nav-chat-header-actions">
+                  <button type="button" onClick={() => setShowConversationSettings((current) => !current)} title="Conversation settings"><FaEllipsisH /></button>
+                  <button type="button" onClick={() => setActiveChatUser(null)}><FaTimes /></button>
+                </div>
               </div>
+              {showConversationSettings && (
+                <div className="conversation-settings-panel">
+                  <button type="button" onClick={toggleConversationMute}>
+                    <span>{activeChatUser.is_muted ? <FaVolumeUp /> : <FaVolumeMute />} {activeChatUser.is_muted ? "Unmute conversation" : "Mute conversation"}</span>
+                    <small>{activeChatUser.is_muted ? "Messages can notify you again." : "Stop notifications from this chat."}</small>
+                  </button>
+                  <button type="button" className="danger" onClick={toggleConversationBlock}>
+                    <span><FaBan /> {activeChatUser.is_blocked ? "Unblock messages" : "Block messages"}</span>
+                    <small>{activeChatUser.is_blocked ? "Allow messages from this person." : "They will not be able to message you."}</small>
+                  </button>
+                  <button type="button" className="danger" onClick={deleteConversation}>
+                    <span><FaTrash /> Delete chat</span>
+                    <small>Remove this conversation from your inbox only.</small>
+                  </button>
+                </div>
+              )}
               <div className="nav-chat-messages">
-                {conversation.length === 0 ? (
+                {activeChatUser.is_blocked ? (
+                  <p className="chat-empty">You blocked this conversation.</p>
+                ) : conversation.length === 0 ? (
                   <p className="chat-empty">Say hello.</p>
                 ) : (
                   conversation.map((message) => (
@@ -557,9 +728,10 @@ const Navbar = ({ username, profilePicture, userId }) => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") sendMessage();
                   }}
-                  placeholder="Write a message"
+                  placeholder={activeChatUser.is_blocked ? "Unblock to send a message" : "Write a message"}
+                  disabled={activeChatUser.is_blocked}
                 />
-                <button type="button" onClick={sendMessage}><FaPaperPlane /></button>
+                <button type="button" onClick={sendMessage} disabled={activeChatUser.is_blocked}><FaPaperPlane /></button>
               </div>
             </section>
           )}
@@ -571,14 +743,15 @@ const Navbar = ({ username, profilePicture, userId }) => {
           ref={menuRef}
           onClick={() => setShowMenu(!showMenu)}
         >
-          {profilePicture ? (
+          {isAuthenticated && profilePicture ? (
             <img src={profilePicture} alt="Profile" className="profile-pic" />
           ) : isAuthenticated && username ? (
             <div className="profile-initial">{getInitial(username)}</div>
           ) : (
             <button className="login-pill" type="button">Log in</button>
           )}
-          <div className={`dropdown-menu ${showMenu ? "show" : ""}`}>
+          {showMenu && (
+          <div className="account-dropdown-menu" onClick={(event) => event.stopPropagation()}>
             {isAuthenticated ? (
               <>
                 <div className="account-name">{username}</div>
@@ -605,6 +778,7 @@ const Navbar = ({ username, profilePicture, userId }) => {
               </>
             )}
           </div>
+          )}
         </div>
       </div>
     </header>

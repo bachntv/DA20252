@@ -31,6 +31,36 @@
   font-size: 34px;
 }
 
+.artist-stats-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.artist-stats-grid div {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.artist-stats-grid span,
+.artist-stats-grid strong {
+  display: block;
+}
+
+.artist-stats-grid span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.artist-stats-grid strong {
+  font-size: 24px;
+  margin-top: 4px;
+}
+
 .artist-upload-panel {
   background: var(--glass-bg);
   border: var(--glass-border);
@@ -39,9 +69,27 @@
   padding: 20px;
 }
 
+.artist-panel-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
 .artist-upload-panel h2 {
   font-size: 18px;
-  margin: 0 0 14px;
+  margin: 0;
+}
+
+.artist-panel-heading button,
+.artist-upload-actions button {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 8px 12px;
 }
 
 .artist-upload-form {
@@ -126,7 +174,8 @@
 }
 
 .artist-upload-row strong,
-.artist-upload-row span {
+.artist-upload-row span,
+.artist-upload-row small {
   display: block;
 }
 
@@ -134,6 +183,23 @@
   color: var(--text-secondary);
   font-size: 13px;
   margin-top: 4px;
+}
+
+.artist-upload-row small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.artist-rejection-reason {
+  color: #ffb4a8;
+}
+
+.artist-upload-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .upload-status {
@@ -164,7 +230,20 @@
 }
 
 @media (max-width: 720px) {
+  .artist-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .artist-upload-form {
     grid-template-columns: 1fr;
+  }
+
+  .artist-upload-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .artist-upload-actions {
+    align-items: flex-start;
   }
 }

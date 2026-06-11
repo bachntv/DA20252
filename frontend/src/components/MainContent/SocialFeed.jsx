@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FaCamera,
+  FaBan,
   FaCheck,
   FaChevronLeft,
   FaChevronRight,
   FaComment,
   FaEdit,
+  FaEllipsisH,
   FaHeart,
   FaMusic,
   FaPaperPlane,
@@ -13,7 +15,6 @@ import {
   FaPlay,
   FaPlus,
   FaRegHeart,
-  FaRetweet,
   FaSave,
   FaSearch,
   FaTimes,
@@ -67,7 +68,9 @@ const SocialFeed = () => {
   const [activeChatUser, setActiveChatUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageDraft, setMessageDraft] = useState("");
+  const [showChatSettings, setShowChatSettings] = useState(false);
   const [content, setContent] = useState("");
+  const [postAudience, setPostAudience] = useState("public");
   const [attachSong, setAttachSong] = useState(true);
   const [postMediaFile, setPostMediaFile] = useState(null);
   const [postMediaPreview, setPostMediaPreview] = useState("");
@@ -76,6 +79,7 @@ const SocialFeed = () => {
   const [storyPreview, setStoryPreview] = useState("");
   const [storyMediaType, setStoryMediaType] = useState("");
   const [storyContent, setStoryContent] = useState("");
+  const [storyAudience, setStoryAudience] = useState("public");
   const [selectedStoryTrack, setSelectedStoryTrack] = useState(null);
   const [storySongQuery, setStorySongQuery] = useState("");
   const [storySongResults, setStorySongResults] = useState([]);
@@ -252,6 +256,7 @@ const SocialFeed = () => {
       if (postMediaFile) {
         const formData = new FormData();
         formData.append("content", content);
+        formData.append("audience", postAudience);
         if (trackId) formData.append("track_id", trackId);
         formData.append("media", postMediaFile);
 
@@ -263,10 +268,11 @@ const SocialFeed = () => {
         await authFetch(`${API_BASE}/api/social/posts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, track_id: trackId }),
+          body: JSON.stringify({ content, track_id: trackId, audience: postAudience }),
         });
       }
       setContent("");
+      setPostAudience("public");
       setPostMediaFile(null);
       refreshSocial();
     } catch (err) {
@@ -282,6 +288,7 @@ const SocialFeed = () => {
       const formData = new FormData();
       formData.append("content", storyContent);
       formData.append("story_type", storyType);
+      formData.append("audience", storyAudience);
       if (trackId) formData.append("track_id", trackId);
       if (storyFile) formData.append("media", storyFile);
       await authFetch(`${API_BASE}/api/social/stories/photo`, {
@@ -296,6 +303,7 @@ const SocialFeed = () => {
       setStorySongResults([]);
       setIsStorySongPickerOpen(false);
       setStoryType("story");
+      setStoryAudience("public");
       setIsStoryCreatorOpen(false);
       setStoryCreatorStep("type");
       fetchStories();
@@ -327,6 +335,7 @@ const SocialFeed = () => {
     setStorySongResults([]);
     setIsStorySongPickerOpen(false);
     setStoryType("story");
+    setStoryAudience("public");
   };
 
   const toggleLike = async (postId) => {
@@ -566,9 +575,11 @@ const SocialFeed = () => {
   const openChat = async (user) => {
     if (!user?.id) return;
     setActiveChatUser(user);
+    setShowChatSettings(false);
     try {
       const res = await authFetch(`${API_BASE}/api/social/messages/${user.id}`);
       const data = await res.json();
+      if (data.user) setActiveChatUser(data.user);
       setMessages(data.messages || []);
       fetchThreads();
     } catch (err) {
@@ -578,7 +589,7 @@ const SocialFeed = () => {
 
   const sendMessage = async () => {
     const value = messageDraft.trim();
-    if (!value || !activeChatUser?.id) return;
+    if (!value || !activeChatUser?.id || activeChatUser.is_blocked) return;
 
     try {
       const res = await authFetch(`${API_BASE}/api/social/messages/${activeChatUser.id}`, {
@@ -592,6 +603,53 @@ const SocialFeed = () => {
       fetchThreads();
     } catch (err) {
       console.error("Failed to send message", err);
+    }
+  };
+
+  const toggleChatMute = async () => {
+    if (!activeChatUser?.id) return;
+    const nextMuted = !activeChatUser.is_muted;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${activeChatUser.id}/mute`, {
+        method: nextMuted ? "POST" : "DELETE",
+      });
+      setActiveChatUser((current) => current ? { ...current, is_muted: nextMuted } : current);
+    } catch (err) {
+      console.error("Failed to update chat mute state", err);
+    }
+  };
+
+  const toggleChatBlock = async () => {
+    if (!activeChatUser?.id) return;
+    const nextBlocked = !activeChatUser.is_blocked;
+    try {
+      await authFetch(`${API_BASE}/api/social/users/${activeChatUser.id}/block`, {
+        method: nextBlocked ? "POST" : "DELETE",
+      });
+      setActiveChatUser((current) => current ? { ...current, is_blocked: nextBlocked } : current);
+      if (nextBlocked) {
+        setMessages([]);
+        setMessageDraft("");
+      }
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to update chat block state", err);
+    }
+  };
+
+  const deleteChat = async () => {
+    if (!activeChatUser?.id) return;
+    const confirmed = window.confirm(`Delete chat with ${activeChatUser.username}? This only removes it from your inbox.`);
+    if (!confirmed) return;
+    try {
+      await authFetch(`${API_BASE}/api/social/messages/${activeChatUser.id}`, { method: "DELETE" });
+      setMessages([]);
+      setMessageDraft("");
+      setShowChatSettings(false);
+      setActiveChatUser(null);
+      fetchThreads();
+    } catch (err) {
+      console.error("Failed to delete chat", err);
     }
   };
 
@@ -791,7 +849,17 @@ const SocialFeed = () => {
     return () => document.removeEventListener("mousedown", closePicker);
   }, [isStorySongPickerOpen]);
 
-  const activeStory = activeStoryIndex === null ? null : stories[activeStoryIndex];
+  const visibleStories = useMemo(() => stories.filter((story) => story.story_type === "story"), [stories]);
+  const activeStoryByUser = useMemo(() => {
+    const map = {};
+    visibleStories.forEach((story) => {
+      if (!map[story.author?.id] || (!story.is_seen && map[story.author?.id].is_seen)) {
+        map[story.author?.id] = story;
+      }
+    });
+    return map;
+  }, [visibleStories]);
+  const activeStory = activeStoryIndex === null ? null : visibleStories[activeStoryIndex];
   const activeStoryMediaType = activeStory?.media_type || (activeStory?.image_url ? "image" : null);
   const activeStoryMediaUrl = activeStory?.media_url || activeStory?.image_url;
 
@@ -805,9 +873,9 @@ const SocialFeed = () => {
     setActiveStoryIndex((current) => {
       if (current === null) return null;
       const nextIndex = current + 1;
-      return nextIndex < stories.length ? nextIndex : null;
+      return nextIndex < visibleStories.length ? nextIndex : null;
     });
-  }, [stories.length]);
+  }, [visibleStories.length]);
 
   const showPreviousStory = () => {
     setStoryProgress(0);
@@ -833,14 +901,37 @@ const SocialFeed = () => {
       return;
     }
 
-    openStoryViewer(index);
+    const storyIndex = visibleStories.findIndex((item) => item.id === story.id);
+    openStoryViewer(storyIndex >= 0 ? storyIndex : index);
   };
 
+  useEffect(() => {
+    if (!activeStory?.id || activeStory.is_seen) return;
+    const markViewed = async () => {
+      try {
+        const res = await authFetch(`${API_BASE}/api/social/stories/${activeStory.id}/view`, { method: "POST" });
+        const data = await res.json();
+        if (data.story) updateStory(data.story);
+      } catch (err) {
+        console.error("Failed to mark story viewed", err);
+      }
+    };
+    markViewed();
+  }, [activeStory?.id, activeStory?.is_seen]);
+
   const renderUserAvatar = (profileUser, className = "post-avatar") => {
+    const story = activeStoryByUser[profileUser?.id];
+    const ringClass = story ? ` story-ring ${story.is_seen ? "seen" : "unseen"}` : "";
+    const openStory = (event) => {
+      if (!story) return;
+      event.stopPropagation();
+      const storyIndex = visibleStories.findIndex((item) => item.id === story.id);
+      if (storyIndex >= 0) openStoryViewer(storyIndex);
+    };
     if (profileUser?.profile_picture_url) {
-      return <img className={`${className} avatar-image`} src={profileUser.profile_picture_url} alt={profileUser.username} />;
+      return <img className={`${className} avatar-image${ringClass}`} src={profileUser.profile_picture_url} alt={profileUser.username} onClick={openStory} />;
     }
-    return <div className={className}>{profileUser?.username?.[0]?.toUpperCase() || "U"}</div>;
+    return <div className={`${className}${ringClass}`} onClick={openStory}>{profileUser?.username?.[0]?.toUpperCase() || "U"}</div>;
   };
 
   const openUserProfile = (profileUser, event) => {
@@ -1042,7 +1133,7 @@ const SocialFeed = () => {
           {activeSection === "feed" && (
             <div className="scope-toggle">
               <button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All</button>
-              <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Following</button>
+              <button className={scope === "following" ? "active" : ""} onClick={() => setScope("following")}>Friends</button>
             </div>
           )}
         </div>
@@ -1179,7 +1270,7 @@ const SocialFeed = () => {
                           <span>{reel.comment_count || reelComments.length}</span>
                         </button>
                         <button onClick={(event) => { event.stopPropagation(); openShareDialog(reel, "reel"); }} title="Share">
-                          <FaRetweet />
+                          <FaPaperPlane />
                           <span>Share</span>
                         </button>
                       </div>
@@ -1226,7 +1317,7 @@ const SocialFeed = () => {
               </div>
             </article>
             {stories.map((story, index) => (
-              <button className="story-tile story-view-button" key={story.id} onClick={() => openStoryOrReel(story, index)} type="button">
+              <button className={`story-tile story-view-button ${story.story_type === "story" && story.is_seen ? "seen" : "unseen"}`} key={story.id} onClick={() => openStoryOrReel(story, index)} type="button">
                 {story.media_type === "video" && story.media_url ? (
                   <video src={story.media_url} muted playsInline />
                 ) : story.media_url || story.image_url ? (
@@ -1259,6 +1350,14 @@ const SocialFeed = () => {
           </div>
           <div className="composer-actions">
             <div className="composer-options">
+              <label className="composer-pill audience-picker">
+                Audience
+                <select value={postAudience} onChange={(event) => setPostAudience(event.target.value)}>
+                  <option value="public">Public</option>
+                  <option value="friends">Friends</option>
+                  <option value="only_me">Only me</option>
+                </select>
+              </label>
               <label className="composer-pill">
                 <input
                   type="checkbox"
@@ -1304,7 +1403,7 @@ const SocialFeed = () => {
                   </button>
                   <div>
                       <strong className="profile-name-link" onClick={(event) => openUserProfile(post.author, event)}>{post.author.username}</strong>
-                    <span>{new Date(post.created_at).toLocaleString()}</span>
+                    <span>{new Date(post.created_at).toLocaleString()} · {post.audience === "friends" ? "Friends" : post.audience === "only_me" ? "Only me" : "Public"}</span>
                   </div>
                 </div>
                 {post.is_owner && (
@@ -1348,7 +1447,7 @@ const SocialFeed = () => {
                   <FaComment /> Comment {post.comment_count}
                 </button>
                 <button onClick={() => openShareDialog(post)}>
-                  <FaRetweet /> Share {post.share_count}
+                  <FaPaperPlane /> Share {post.share_count}
                 </button>
               </div>
 
@@ -1509,14 +1608,38 @@ const SocialFeed = () => {
       {activeChatUser && (
         <section className="chat-dock">
           <div className="chat-header">
-            <div>
-              <strong>{activeChatUser.username}</strong>
-              <span>Direct message</span>
+            <div className="chat-header-user">
+              {renderUserAvatar(activeChatUser, "post-avatar")}
+              <div>
+                <strong>{activeChatUser.username}</strong>
+                <span>{activeChatUser.is_blocked ? "Blocked" : activeChatUser.is_muted ? "Muted conversation" : "Direct message"}</span>
+              </div>
             </div>
-            <button onClick={() => setActiveChatUser(null)}><FaTimes /></button>
+            <div className="chat-header-actions">
+              <button type="button" onClick={() => setShowChatSettings((current) => !current)}><FaEllipsisH /></button>
+              <button type="button" onClick={() => setActiveChatUser(null)}><FaTimes /></button>
+            </div>
           </div>
+          {showChatSettings && (
+            <div className="chat-settings-dock">
+              <button type="button" onClick={toggleChatMute}>
+                <span>{activeChatUser.is_muted ? <FaVolumeUp /> : <FaVolumeMute />} {activeChatUser.is_muted ? "Unmute conversation" : "Mute conversation"}</span>
+                <small>{activeChatUser.is_muted ? "Messages can notify you again." : "Stop notifications from this chat."}</small>
+              </button>
+              <button type="button" className="danger" onClick={toggleChatBlock}>
+                <span><FaBan /> {activeChatUser.is_blocked ? "Unblock messages" : "Block messages"}</span>
+                <small>{activeChatUser.is_blocked ? "Allow messages from this person." : "They will not be able to message you."}</small>
+              </button>
+              <button type="button" className="danger" onClick={deleteChat}>
+                <span><FaTrash /> Delete chat</span>
+                <small>Remove this conversation from your inbox only.</small>
+              </button>
+            </div>
+          )}
           <div className="chat-messages">
-            {messages.length === 0 ? (
+            {activeChatUser.is_blocked ? (
+              <p className="panel-empty">You blocked this conversation.</p>
+            ) : messages.length === 0 ? (
               <p className="panel-empty">Say hello.</p>
             ) : (
               messages.map((message) => (
@@ -1533,9 +1656,10 @@ const SocialFeed = () => {
               onKeyDown={(e) => {
                 if (e.key === "Enter") sendMessage();
               }}
-              placeholder="Message"
+              placeholder={activeChatUser.is_blocked ? "Unblock to send a message" : "Message"}
+              disabled={activeChatUser.is_blocked}
             />
-            <button onClick={sendMessage}><FaPaperPlane /></button>
+            <button onClick={sendMessage} disabled={activeChatUser.is_blocked}><FaPaperPlane /></button>
           </div>
         </section>
       )}
@@ -1545,7 +1669,7 @@ const SocialFeed = () => {
         }}>
           <div className="story-viewer" onMouseDown={(event) => event.stopPropagation()}>
             <div className="story-viewer-progress">
-              {stories.map((story, index) => (
+              {visibleStories.map((story, index) => (
                 <span key={story.id}>
                   <b
                     style={{
@@ -1600,7 +1724,7 @@ const SocialFeed = () => {
                 <FaChevronLeft />
               </button>
             )}
-            {activeStoryIndex < stories.length - 1 && (
+            {activeStoryIndex < visibleStories.length - 1 && (
               <button className="story-viewer-nav next" onClick={showNextStory} title="Next story">
                 <FaChevronRight />
               </button>
@@ -1669,6 +1793,14 @@ const SocialFeed = () => {
                     onChange={(event) => setStoryContent(event.target.value)}
                     placeholder={storyType === "story" ? "Say something for 24 hours" : "Caption your reel"}
                   />
+                  <label className="story-audience-picker">
+                    Audience
+                    <select value={storyAudience} onChange={(event) => setStoryAudience(event.target.value)}>
+                      <option value="public">Public</option>
+                      <option value="friends">Friends</option>
+                      <option value="only_me">Only me</option>
+                    </select>
+                  </label>
                   <div className="story-song-picker">
                     <div className="story-song-picker-header" onClick={() => setIsStorySongPickerOpen(true)}>
                       <strong>Choose song</strong>

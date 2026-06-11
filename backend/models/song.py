@@ -30,3 +30,4 @@ class Song(Base):
     audio_url = Column(String, nullable=True)
     approval_status = Column(String, nullable=False, default="approved")
     uploaded_by_user_id = Column(String, nullable=True)
+    rejection_reason = Column(String, nullable=True)

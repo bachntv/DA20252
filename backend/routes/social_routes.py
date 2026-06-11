@@ -24,6 +24,7 @@ from models.social import (
     SocialStory,
     SocialStoryComment,
     SocialStoryLike,
+    SocialStoryView,
 )
 from models.subscription import Subscription
 from models.user import User
@@ -51,6 +52,7 @@ def get_db():
 class PostCreate(BaseModel):
     content: str
     track_id: str | None = None
+    audience: str = "public"
 
 
 class CommentCreate(BaseModel):
@@ -83,6 +85,19 @@ def user_summary(db: Session, user_id: str | None):
     if not user_id:
         return user_public(None)
     return user_public(db.query(User).filter(User.id == user_id).first())
+
+
+def user_chat_settings(db: Session, current_user_id: str, target_user: User):
+    summary = user_public(target_user)
+    summary["is_muted"] = db.query(SocialMute).filter(
+        SocialMute.muter_id == current_user_id,
+        SocialMute.muted_id == target_user.id,
+    ).first() is not None
+    summary["is_blocked"] = db.query(SocialBlock).filter(
+        SocialBlock.blocker_id == current_user_id,
+        SocialBlock.blocked_id == target_user.id,
+    ).first() is not None
+    return summary
 
 
 def track_public(db: Session, track_id: str | None):
@@ -168,6 +183,30 @@ def ensure_friendship(db: Session, user_id: str, friend_id: str):
         db.add(SocialFriendship(user_id=user_id, friend_id=friend_id))
 
 
+def are_friends(db: Session, user_id: str, friend_id: str):
+    return db.query(SocialFriendship).filter(
+        SocialFriendship.user_id == user_id,
+        SocialFriendship.friend_id == friend_id,
+    ).first() is not None
+
+
+def normalize_audience(audience: str | None):
+    clean = (audience or "public").strip().lower()
+    if clean not in {"public", "friends", "only_me"}:
+        raise HTTPException(status_code=400, detail="Audience must be public, friends, or only_me")
+    return clean
+
+
+def can_view_audience(db: Session, owner_id: str, current_user_id: str, audience: str):
+    if owner_id == current_user_id:
+        return True
+    if audience == "public":
+        return True
+    if audience == "friends":
+        return are_friends(db, owner_id, current_user_id)
+    return False
+
+
 def serialize_story(db: Session, story: SocialStory, current_user_id: str):
     media_url = story.media_url or story.image_url
     media_type = story.media_type or ("image" if story.image_url else None)
@@ -185,6 +224,10 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         SocialStoryLike.story_id == story.id,
         SocialStoryLike.user_id == current_user_id,
     ).first() is not None
+    is_seen = story.user_id == current_user_id or db.query(SocialStoryView).filter(
+        SocialStoryView.story_id == story.id,
+        SocialStoryView.user_id == current_user_id,
+    ).first() is not None
     return {
         "id": story.id,
         "content": story.content,
@@ -195,7 +238,9 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         "story_type": story.story_type,
         "created_at": story.created_at.isoformat(),
         "author": user_summary(db, story.user_id),
+        "audience": story.audience,
         "is_owner": story.user_id == current_user_id,
+        "is_seen": is_seen,
         "like_count": like_count,
         "comment_count": comment_count,
         "is_liked": is_liked,
@@ -254,6 +299,7 @@ def serialize_post(db: Session, post: SocialPost, current_user_id: str):
         "media_url": media_url,
         "media_type": media_type,
         "shared_post_id": post.shared_post_id,
+        "audience": post.audience,
         "is_owner": post.user_id == current_user_id,
         "like_count": like_count,
         "comment_count": comment_count,
@@ -329,13 +375,23 @@ def get_feed(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(SocialPost)
+    friend_ids = [
+        row.friend_id
+        for row in db.query(SocialFriendship).filter(SocialFriendship.user_id == current_user.id).all()
+    ]
+    query = db.query(SocialPost).filter(
+        or_(
+            SocialPost.user_id == current_user.id,
+            SocialPost.audience == "public",
+            and_(SocialPost.audience == "friends", SocialPost.user_id.in_(friend_ids)),
+        )
+    )
     if scope == "following":
         following_ids = [
             row.following_id
             for row in db.query(SocialFollow).filter(SocialFollow.follower_id == current_user.id).all()
         ]
-        query = query.filter(or_(SocialPost.user_id.in_(following_ids), SocialPost.user_id == current_user.id))
+        query = query.filter(or_(SocialPost.user_id.in_(following_ids), SocialPost.user_id.in_(friend_ids), SocialPost.user_id == current_user.id))
 
     posts = query.order_by(SocialPost.created_at.desc()).limit(50).all()
     return [serialize_post(db, post, current_user.id) for post in posts]
@@ -345,13 +401,14 @@ def get_feed(
 def create_post(payload: PostCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_not_muted(current_user)
     content = payload.content.strip()
+    audience = normalize_audience(payload.audience)
     if not content:
         raise HTTPException(status_code=400, detail="Post content is required")
 
     if payload.track_id and not db.query(Song).filter(Song.track_id == payload.track_id).first():
         raise HTTPException(status_code=404, detail="Track not found")
 
-    post = SocialPost(user_id=current_user.id, content=content, track_id=payload.track_id)
+    post = SocialPost(user_id=current_user.id, content=content, track_id=payload.track_id, audience=audience)
     db.add(post)
     db.flush()
 
@@ -375,6 +432,7 @@ async def create_photo_post(
     request: Request,
     content: str = Form(""),
     track_id: str | None = Form(None),
+    audience: str = Form("public"),
     media: UploadFile | None = File(None),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
@@ -382,6 +440,7 @@ async def create_photo_post(
 ):
     require_not_muted(current_user)
     post_content = content.strip()
+    clean_audience = normalize_audience(audience)
     upload = media or image
     if not post_content and not upload:
         raise HTTPException(status_code=400, detail="Post content or media is required")
@@ -397,6 +456,7 @@ async def create_photo_post(
         image_url=media_url if media_type == "image" else None,
         media_url=media_url,
         media_type=media_type or "image",
+        audience=clean_audience,
     )
     db.add(post)
     db.flush()
@@ -460,6 +520,8 @@ def toggle_like(post_id: str, db: Session = Depends(get_db), current_user: User 
     post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    if not can_view_audience(db, post.user_id, current_user.id, post.audience):
+        raise HTTPException(status_code=403, detail="Post is not available")
 
     existing = db.query(SocialLike).filter(SocialLike.post_id == post_id, SocialLike.user_id == current_user.id).first()
     if existing:
@@ -481,6 +543,8 @@ def add_comment(post_id: str, payload: CommentCreate, db: Session = Depends(get_
     post = db.query(SocialPost).filter(SocialPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    if not can_view_audience(db, post.user_id, current_user.id, post.audience):
+        raise HTTPException(status_code=403, detail="Post is not available")
 
     content = payload.content.strip()
     if not content:
@@ -532,6 +596,8 @@ def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db)
     original = db.query(SocialPost).filter(SocialPost.id == post_id).first()
     if not original:
         raise HTTPException(status_code=404, detail="Post not found")
+    if not can_view_audience(db, original.user_id, current_user.id, original.audience):
+        raise HTTPException(status_code=403, detail="Post is not available")
 
     share = SocialShare(post_id=post_id, user_id=current_user.id)
     post = SocialPost(
@@ -542,6 +608,7 @@ def share_post(post_id: str, payload: ShareCreate, db: Session = Depends(get_db)
         media_url=original.media_url,
         media_type=original.media_type,
         shared_post_id=original.id,
+        audience=original.audience,
     )
     db.add(share)
     db.add(post)
@@ -559,20 +626,19 @@ def get_stories(db: Session = Depends(get_db), current_user: User = Depends(get_
         row.friend_id
         for row in db.query(SocialFriendship).filter(SocialFriendship.user_id == current_user.id).all()
     ]
-    following_ids = [
-        row.following_id
-        for row in db.query(SocialFollow).filter(SocialFollow.follower_id == current_user.id).all()
-    ]
-    visible_user_ids = list({current_user.id, *friend_ids, *following_ids})
 
     stories = (
         db.query(SocialStory)
         .filter(
-            SocialStory.user_id.in_(visible_user_ids),
             or_(SocialStory.story_type == "reel", SocialStory.created_at >= since),
+            or_(
+                SocialStory.user_id == current_user.id,
+                SocialStory.audience == "public",
+                and_(SocialStory.audience == "friends", SocialStory.user_id.in_(friend_ids)),
+            ),
         )
         .order_by(SocialStory.created_at.desc())
-        .limit(40)
+        .limit(120)
         .all()
     )
     return [serialize_story(db, story, current_user.id) for story in stories]
@@ -584,6 +650,7 @@ async def create_story(
     content: str = Form(""),
     track_id: str | None = Form(None),
     story_type: str = Form("story"),
+    audience: str = Form("public"),
     media: UploadFile | None = File(None),
     image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
@@ -592,6 +659,7 @@ async def create_story(
     require_not_muted(current_user)
     story_content = content.strip()
     clean_story_type = story_type.strip().lower()
+    clean_audience = normalize_audience(audience)
     if clean_story_type not in {"story", "reel"}:
         raise HTTPException(status_code=400, detail="Story type must be story or reel")
     upload = media or image
@@ -610,11 +678,32 @@ async def create_story(
         media_type=media_type or "image",
         track_id=track_id,
         story_type=clean_story_type,
+        audience=clean_audience,
     )
     db.add(story)
     db.commit()
     db.refresh(story)
     return serialize_story(db, story, current_user.id)
+
+
+@router.post("/stories/{story_id}/view")
+def mark_story_viewed(story_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if not can_view_audience(db, story.user_id, current_user.id, story.audience):
+        raise HTTPException(status_code=403, detail="Story is not available")
+    if story.story_type != "reel" and story.created_at < datetime.utcnow() - timedelta(hours=24):
+        raise HTTPException(status_code=404, detail="Story is no longer available")
+
+    existing = db.query(SocialStoryView).filter(
+        SocialStoryView.story_id == story.id,
+        SocialStoryView.user_id == current_user.id,
+    ).first()
+    if not existing:
+        db.add(SocialStoryView(story_id=story.id, user_id=current_user.id))
+        db.commit()
+    return {"story": serialize_story(db, story, current_user.id)}
 
 
 @router.delete("/stories/{story_id}")
@@ -635,6 +724,8 @@ def toggle_story_like(story_id: str, db: Session = Depends(get_db), current_user
     story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    if not can_view_audience(db, story.user_id, current_user.id, story.audience):
+        raise HTTPException(status_code=403, detail="Story is not available")
     if is_blocked_between(db, current_user.id, story.user_id):
         raise HTTPException(status_code=403, detail="You cannot interact with this reel")
 
@@ -665,6 +756,8 @@ def add_story_comment(
     story = db.query(SocialStory).filter(SocialStory.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    if not can_view_audience(db, story.user_id, current_user.id, story.audience):
+        raise HTTPException(status_code=403, detail="Story is not available")
     if is_blocked_between(db, current_user.id, story.user_id):
         raise HTTPException(status_code=403, detail="You cannot comment on this reel")
 
@@ -870,7 +963,12 @@ def unmute_user(user_id: str, db: Session = Depends(get_db), current_user: User 
 def get_message_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = (
         db.query(SocialMessage)
-        .filter(or_(SocialMessage.sender_id == current_user.id, SocialMessage.recipient_id == current_user.id))
+        .filter(
+            or_(
+                and_(SocialMessage.sender_id == current_user.id, SocialMessage.deleted_by_sender == False),
+                and_(SocialMessage.recipient_id == current_user.id, SocialMessage.deleted_by_recipient == False),
+            )
+        )
         .order_by(SocialMessage.created_at.desc())
         .limit(200)
         .all()
@@ -897,15 +995,30 @@ def get_messages(user_id: str, db: Session = Depends(get_db), current_user: User
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if is_blocked_between(db, current_user.id, user_id):
+    blocked_by_target = db.query(SocialBlock).filter(
+        SocialBlock.blocker_id == user_id,
+        SocialBlock.blocked_id == current_user.id,
+    ).first() is not None
+    if blocked_by_target:
         raise HTTPException(status_code=403, detail="Messages are unavailable for this profile")
 
-    messages = (
+    blocked_by_current_user = db.query(SocialBlock).filter(
+        SocialBlock.blocker_id == current_user.id,
+        SocialBlock.blocked_id == user_id,
+    ).first() is not None
+
+    messages = [] if blocked_by_current_user else (
         db.query(SocialMessage)
         .filter(
             or_(
                 and_(SocialMessage.sender_id == current_user.id, SocialMessage.recipient_id == user_id),
                 and_(SocialMessage.sender_id == user_id, SocialMessage.recipient_id == current_user.id),
+            )
+        )
+        .filter(
+            or_(
+                and_(SocialMessage.sender_id == current_user.id, SocialMessage.deleted_by_sender == False),
+                and_(SocialMessage.recipient_id == current_user.id, SocialMessage.deleted_by_recipient == False),
             )
         )
         .order_by(SocialMessage.created_at.asc())
@@ -919,9 +1032,27 @@ def get_messages(user_id: str, db: Session = Depends(get_db), current_user: User
         db.commit()
 
     return {
-        "user": user_public(target),
+        "user": user_chat_settings(db, current_user.id, target),
         "messages": [serialize_message(db, message, current_user.id) for message in messages],
     }
+
+
+@router.delete("/messages/{user_id}")
+def delete_chat(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.query(SocialMessage).filter(
+        SocialMessage.sender_id == current_user.id,
+        SocialMessage.recipient_id == user_id,
+    ).update({"deleted_by_sender": True}, synchronize_session=False)
+    db.query(SocialMessage).filter(
+        SocialMessage.sender_id == user_id,
+        SocialMessage.recipient_id == current_user.id,
+    ).update({"deleted_by_recipient": True}, synchronize_session=False)
+    db.commit()
+    return {"status": "deleted", "user_id": user_id}
 
 
 @router.post("/messages/{user_id}")

@@ -131,6 +131,11 @@
   color: var(--text-secondary);
 }
 
+.admin-song-reason {
+  margin-top: 6px;
+  max-width: 150px;
+}
+
 .admin-song-main strong {
   overflow: hidden;
   text-overflow: ellipsis;

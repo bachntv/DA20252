@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import "../styles/RightContent.css";
 import { usePlayer } from "../context/PlayerContext";
-import { FaShareAlt, FaTimes } from "react-icons/fa";
+import { FaPaperPlane, FaTimes } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
 import { authFetch } from '../utils/authFetch';
 import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
@@ -368,7 +368,7 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics,
             disabled={!userId || shareState === "sharing"}
             title={!userId ? "Log in to share songs" : "Share song on social feed"}
           >
-            <FaShareAlt />
+            <FaPaperPlane />
             {shareState === "sharing"
               ? "Sharing..."
               : shareState === "shared"
@@ -380,16 +380,17 @@ const RightContent = ({ currentSong, isQueueVisible, onShowLyrics, onEditLyrics,
         </div>
         <div className="purchase-section">
           <div>
-            <span className="purchase-label">Digital ownership</span>
+            <span className="purchase-label">Offline download ownership</span>
             <strong>{purchaseState.amount.toLocaleString("vi-VN")} {purchaseState.currency}</strong>
+            <small>Streaming stays available. Buying unlocks download access.</small>
           </div>
           <button
             className={`purchase-button ${purchaseState.owned ? "owned" : ""}`}
             onClick={purchaseCurrentSong}
             disabled={!userId || purchaseState.owned || isPurchasing}
-            title={!userId ? "Log in to buy songs" : purchaseState.owned ? "You own this song" : "Buy this song"}
+            title={!userId ? "Log in to buy downloads" : purchaseState.owned ? "Download unlocked" : "Buy to download offline"}
           >
-            {purchaseState.owned ? "Owned" : isPurchasing ? "Buying..." : "Buy Song"}
+            {purchaseState.owned ? "Download Unlocked" : isPurchasing ? "Buying..." : "Buy to Download"}
           </button>
         </div>
 

@@ -67,6 +67,8 @@ const SignIn = () => {
       const userData = await response.json();
       localStorage.setItem("token", userData.access_token);
       localStorage.setItem("user", JSON.stringify(userData.user));
+      localStorage.setItem("authUser", JSON.stringify(userData.user));
+      window.dispatchEvent(new Event("authUpdated"));
 
       console.log("Signed in user:", userData);
       alert(`Welcome, ${userData.user.username}!`);
