@@ -170,6 +170,7 @@ const PlaylistPage = () => {
         id: playlistData.id,
         name: playlistData.name,
         owner: playlistData.owner_name,
+        ownerUserId: playlistData.owner_user_id,
         image: playlistData.cover_image_url,
         description: playlistData.description || "Your favorite songs all in one place.",
         tracks: formattedTracks,
@@ -231,6 +232,9 @@ const PlaylistPage = () => {
     );
   }
 
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const isPlaylistOwner = String(playlist.ownerUserId || "") === String(storedUser.id || "");
+
   return (
     <div className="playlist-page">
       <div className="playlist-header">
@@ -245,7 +249,7 @@ const PlaylistPage = () => {
           <h1>{playlist.name}</h1>
           <p>{playlist.owner} • {playlist.tracks.length} songs</p>
           <p className="playlist-description">{playlist.description}</p>
-          {playlist.name !== "Liked Songs" && (
+          {isPlaylistOwner && playlist.name !== "Liked Songs" && (
             <div className="edit-dropdown" ref={editDropdownRef}>
               <button
                 className="edit-btn"
@@ -388,7 +392,9 @@ const PlaylistPage = () => {
                     {openMenuId === track.id && (
                       <div className="options-menu show">
                         <button onClick={() => addToQueue(track.id)}>Add to Queue</button>
-                        <button onClick={() => removeFromPlaylist(track.id)}>Remove from Playlist</button>
+                        {isPlaylistOwner && (
+                          <button onClick={() => removeFromPlaylist(track.id)}>Remove from Playlist</button>
+                        )}
                       </div>
                     )}
                   </div>

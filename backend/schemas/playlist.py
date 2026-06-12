@@ -7,6 +7,7 @@ class PlaylistResponse(BaseModel):
     id: str
     name: Optional[str]
     owner_name: str
+    owner_user_id: Optional[str] = None
     type: str
     cover_image_url: Optional[str]
     description: Optional[str]

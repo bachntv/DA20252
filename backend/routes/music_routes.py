@@ -854,7 +854,7 @@ def update_album_moderation(
 def get_user_playlists(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = current_user.id
     query = text("""
-        SELECT playlist_user.playlist_id AS id, playlists.name, users.username AS owner_name, playlist_user.type, playlists.cover_image_url, playlists.description, playlist_user.created_at, playlist_user.last_played as last_played
+        SELECT playlist_user.playlist_id AS id, playlists.name, users.username AS owner_name, users.id AS owner_user_id, playlist_user.type, playlists.cover_image_url, playlists.description, playlist_user.created_at, playlist_user.last_played as last_played
         FROM playlists
         RIGHT JOIN playlist_user ON playlists.id = playlist_user.playlist_id
         INNER JOIN users ON users.id = playlist_user.user_id
@@ -866,7 +866,7 @@ def get_user_playlists(current_user: User = Depends(get_current_user), db: Sessi
     # Convert to list of PlaylistResponse
     playlists = []
     for row in rows:
-        playlist_id, name, owner_name, type_, cover, desc, created_at, last_played = row
+        playlist_id, name, owner_name, owner_user_id, type_, cover, desc, created_at, last_played = row
 
         if type_ == "artist":
             artist_row = db.execute(text("""
@@ -892,6 +892,7 @@ def get_user_playlists(current_user: User = Depends(get_current_user), db: Sessi
             id=playlist_id,
             name=name,
             owner_name=owner_name,
+            owner_user_id=owner_user_id,
             type=type_,
             cover_image_url=cover,
             description=desc,
@@ -970,6 +971,7 @@ def get_playlist_info(playlist_id: str, db: Session = Depends(get_db)):
             playlists.id,
             playlists.name,
             users.username AS owner_name,
+            users.id AS owner_user_id,
             playlist_user.type,
             playlists.cover_image_url,
             playlists.description,
@@ -990,11 +992,12 @@ def get_playlist_info(playlist_id: str, db: Session = Depends(get_db)):
         id=result[0],
         name=result[1],
         owner_name=result[2],
-        type=result[3],
-        cover_image_url=result[4],
-        description=result[5],
-        created_at=result[6],
-        last_played=result[7]
+        owner_user_id=result[3],
+        type=result[4],
+        cover_image_url=result[5],
+        description=result[6],
+        created_at=result[7],
+        last_played=result[8]
     )
 
 @router.put("/playlist/{playlist_id}/edit")

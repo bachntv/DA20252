@@ -481,11 +481,20 @@ const UserProfile = () => {
           ) : (
             <div className="profile-playlist-grid">
               {profile.playlists.map((playlist) => (
-                <article className="profile-playlist-card" key={playlist.id}>
-                  {playlist.cover_image_url ? <img src={playlist.cover_image_url} alt={playlist.name} /> : <div>{playlist.name[0]?.toUpperCase()}</div>}
+                <button
+                  className="profile-playlist-card"
+                  key={playlist.id}
+                  onClick={() => navigate(`/playlist/${playlist.id}`)}
+                  type="button"
+                  aria-label={`Open playlist ${playlist.name}`}
+                >
+                  <span className="profile-playlist-cover">
+                    {playlist.cover_image_url ? <img src={playlist.cover_image_url} alt={playlist.name} /> : <i>{playlist.name[0]?.toUpperCase()}</i>}
+                    <b className="profile-playlist-play"><FaPlay /></b>
+                  </span>
                   <strong>{playlist.name}</strong>
-                  <span>{playlist.track_count} songs</span>
-                </article>
+                  <small>{playlist.track_count} songs · Open playlist</small>
+                </button>
               ))}
             </div>
           )}

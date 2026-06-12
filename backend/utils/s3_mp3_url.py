@@ -10,6 +10,7 @@ s3_secret_key = os.getenv("S3_SECRET_KEY")
 s3_endpoint = os.getenv("S3_ENDPOINT")
 s3_bucket = os.getenv("S3_BUCKET")
 s3_prefix = os.getenv("S3_PREFIX", "").strip("/")
+s3_region = os.getenv("S3_REGION", "us-east-1")
 
 PRESIGNED_URL_EXPIRES = 3600  # This is an int in seconds, which is correct
 
@@ -28,7 +29,8 @@ def s3_client() -> Minio:
         endpoint=endpoint,
         access_key=s3_access_key,
         secret_key=s3_secret_key,
-        secure=secure
+        secure=secure,
+        region=s3_region,
     )
 
 def generate_presigned_url(filename: str) -> str:
