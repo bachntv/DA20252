@@ -161,5 +161,18 @@ class SocialStoryComment(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     story_id = Column(String, ForeignKey("social_stories.id"), nullable=False, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    parent_comment_id = Column(String, ForeignKey("social_story_comments.id"), nullable=True, index=True)
     content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SocialStoryCommentLike(Base):
+    __tablename__ = "social_story_comment_likes"
+    __table_args__ = (
+        UniqueConstraint("comment_id", "user_id", name="uq_story_comment_like_comment_user"),
+    )
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    comment_id = Column(String, ForeignKey("social_story_comments.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

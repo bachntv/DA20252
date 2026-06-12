@@ -23,6 +23,7 @@ from models.social import (
     SocialShare,
     SocialStory,
     SocialStoryComment,
+    SocialStoryCommentLike,
     SocialStoryLike,
     SocialStoryView,
 )
@@ -57,6 +58,7 @@ class PostCreate(BaseModel):
 
 class CommentCreate(BaseModel):
     content: str
+    parent_comment_id: str | None = None
 
 
 class ContentUpdate(BaseModel):
@@ -228,6 +230,35 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         SocialStoryView.story_id == story.id,
         SocialStoryView.user_id == current_user_id,
     ).first() is not None
+    comment_items = []
+    replies_by_parent = {}
+    for comment, user in comments:
+        like_count = db.query(func.count(SocialStoryCommentLike.id)).filter(
+            SocialStoryCommentLike.comment_id == comment.id
+        ).scalar() or 0
+        is_liked = db.query(SocialStoryCommentLike).filter(
+            SocialStoryCommentLike.comment_id == comment.id,
+            SocialStoryCommentLike.user_id == current_user_id,
+        ).first() is not None
+        item = {
+            "id": comment.id,
+            "content": comment.content,
+            "created_at": comment.created_at.isoformat(),
+            "author": user_public(user),
+            "is_owner": comment.user_id == current_user_id,
+            "parent_comment_id": comment.parent_comment_id,
+            "like_count": like_count,
+            "is_liked": is_liked,
+            "replies": [],
+        }
+        if comment.parent_comment_id:
+            replies_by_parent.setdefault(comment.parent_comment_id, []).append(item)
+        else:
+            comment_items.append(item)
+
+    for item in comment_items:
+        item["replies"] = replies_by_parent.get(item["id"], [])
+
     return {
         "id": story.id,
         "content": story.content,
@@ -244,16 +275,7 @@ def serialize_story(db: Session, story: SocialStory, current_user_id: str):
         "like_count": like_count,
         "comment_count": comment_count,
         "is_liked": is_liked,
-        "comments": [
-            {
-                "id": comment.id,
-                "content": comment.content,
-                "created_at": comment.created_at.isoformat(),
-                "author": user_public(user),
-                "is_owner": comment.user_id == current_user_id,
-            }
-            for comment, user in comments
-        ],
+        "comments": comment_items,
     }
 
 
@@ -765,9 +787,63 @@ def add_story_comment(
     if not content:
         raise HTTPException(status_code=400, detail="Comment is required")
 
-    db.add(SocialStoryComment(story_id=story_id, user_id=current_user.id, content=content))
+    parent_comment = None
+    if payload.parent_comment_id:
+        parent_comment = db.query(SocialStoryComment).filter(
+            SocialStoryComment.id == payload.parent_comment_id,
+            SocialStoryComment.story_id == story_id,
+        ).first()
+        if not parent_comment:
+            raise HTTPException(status_code=404, detail="Parent comment not found")
+
+    db.add(SocialStoryComment(
+        story_id=story_id,
+        user_id=current_user.id,
+        parent_comment_id=parent_comment.id if parent_comment else None,
+        content=content,
+    ))
     if story.user_id != current_user.id:
         notify(db, story.user_id, "social_comment", "New comment", f"{current_user.username} commented on your {story.story_type}.")
+    db.commit()
+    db.refresh(story)
+    return {"story": serialize_story(db, story, current_user.id)}
+
+
+@router.post("/story-comments/{comment_id}/like")
+def toggle_story_comment_like(
+    comment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = db.query(SocialStoryComment).filter(SocialStoryComment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    story = db.query(SocialStory).filter(SocialStory.id == comment.story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if not can_view_audience(db, story.user_id, current_user.id, story.audience):
+        raise HTTPException(status_code=403, detail="Story is not available")
+    if is_blocked_between(db, current_user.id, story.user_id):
+        raise HTTPException(status_code=403, detail="You cannot interact with this reel")
+
+    existing = db.query(SocialStoryCommentLike).filter(
+        SocialStoryCommentLike.comment_id == comment_id,
+        SocialStoryCommentLike.user_id == current_user.id,
+    ).first()
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(SocialStoryCommentLike(comment_id=comment_id, user_id=current_user.id))
+        if comment.user_id != current_user.id:
+            notify(
+                db,
+                comment.user_id,
+                "story_comment_liked",
+                "Comment liked",
+                f"{current_user.username} liked your comment.",
+            )
+
     db.commit()
     db.refresh(story)
     return {"story": serialize_story(db, story, current_user.id)}

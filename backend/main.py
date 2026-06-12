@@ -30,6 +30,7 @@ from models.social import (
     SocialShare,
     SocialStory,
     SocialStoryComment,
+    SocialStoryCommentLike,
     SocialStoryLike,
     SocialStoryView,
 )
@@ -88,6 +89,7 @@ with engine.begin() as conn:
     conn.execute(text("ALTER TABLE social_stories ADD COLUMN IF NOT EXISTS media_type VARCHAR NOT NULL DEFAULT 'image'"))
     conn.execute(text("ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS audience VARCHAR NOT NULL DEFAULT 'public'"))
     conn.execute(text("ALTER TABLE social_stories ADD COLUMN IF NOT EXISTS audience VARCHAR NOT NULL DEFAULT 'public'"))
+    conn.execute(text("ALTER TABLE social_story_comments ADD COLUMN IF NOT EXISTS parent_comment_id VARCHAR"))
     conn.execute(text("ALTER TABLE social_messages ADD COLUMN IF NOT EXISTS deleted_by_sender BOOLEAN NOT NULL DEFAULT FALSE"))
     conn.execute(text("ALTER TABLE social_messages ADD COLUMN IF NOT EXISTS deleted_by_recipient BOOLEAN NOT NULL DEFAULT FALSE"))
     conn.execute(text("ALTER TABLE song_purchases ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 15000"))

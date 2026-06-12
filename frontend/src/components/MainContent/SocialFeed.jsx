@@ -5,6 +5,8 @@ import {
   FaCheck,
   FaChevronLeft,
   FaChevronRight,
+  FaChevronDown,
+  FaChevronUp,
   FaComment,
   FaEdit,
   FaEllipsisH,
@@ -88,6 +90,9 @@ const SocialFeed = () => {
   const [isStoryCreatorOpen, setIsStoryCreatorOpen] = useState(false);
   const [storyCreatorStep, setStoryCreatorStep] = useState("type");
   const [comments, setComments] = useState({});
+  const [openReelCommentsId, setOpenReelCommentsId] = useState(null);
+  const [replyingToComment, setReplyingToComment] = useState(null);
+  const [reelReplyDraft, setReelReplyDraft] = useState("");
   const [shareDialogPost, setShareDialogPost] = useState(null);
   const [shareDialogType, setShareDialogType] = useState("post");
   const [shareMode, setShareMode] = useState("feed");
@@ -109,6 +114,7 @@ const SocialFeed = () => {
   const reelMediaRefs = useRef({});
   const reelAudioRefs = useRef({});
   const reelLastTimeRef = useRef({});
+  const reelScrollLockRef = useRef(false);
   const [activeReelId, setActiveReelId] = useState(null);
   const [reelAudioUrls, setReelAudioUrls] = useState({});
   const [pausedReelIds, setPausedReelIds] = useState({});
@@ -517,20 +523,39 @@ const SocialFeed = () => {
     }
   };
 
-  const addReelComment = async (reelId) => {
-    const value = comments[`reel-${reelId}`]?.trim();
+  const addReelComment = async (reelId, parentCommentId = null) => {
+    const value = parentCommentId
+      ? reelReplyDraft.trim()
+      : comments[`reel-${reelId}`]?.trim();
     if (!value) return;
     try {
       const res = await authFetch(`${API_BASE}/api/social/stories/${reelId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: value }),
+        body: JSON.stringify({ content: value, parent_comment_id: parentCommentId }),
       });
       const data = await res.json();
       if (data.story) updateStory(data.story);
-      setComments((prev) => ({ ...prev, [`reel-${reelId}`]: "" }));
+      if (parentCommentId) {
+        setReelReplyDraft("");
+        setReplyingToComment(null);
+      } else {
+        setComments((prev) => ({ ...prev, [`reel-${reelId}`]: "" }));
+      }
     } catch (err) {
       console.error("Failed to comment on reel", err);
+    }
+  };
+
+  const toggleReelCommentLike = async (commentId) => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/social/story-comments/${commentId}/like`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.story) updateStory(data.story);
+    } catch (err) {
+      console.error("Failed to like reel comment", err);
     }
   };
 
@@ -941,9 +966,42 @@ const SocialFeed = () => {
 
   const reels = useMemo(() => stories.filter((story) => story.story_type === "reel"), [stories]);
 
+  const navigateReel = useCallback((direction) => {
+    if (!reels.length) return;
+    const currentIndex = Math.max(
+      0,
+      reels.findIndex((reel) => String(reel.id) === String(activeReelId))
+    );
+    const nextIndex = Math.min(reels.length - 1, Math.max(0, currentIndex + direction));
+    const nextReel = reels[nextIndex];
+    if (!nextReel || nextIndex === currentIndex) return;
+
+    setOpenReelCommentsId(null);
+    setReplyingToComment(null);
+    setReelReplyDraft("");
+    setActiveReelId(nextReel.id);
+    reelCardsRef.current[nextReel.id]?.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
+    });
+  }, [activeReelId, reels]);
+
+  const handleReelsWheel = useCallback((event) => {
+    if (event.target.closest(".reel-comments") || Math.abs(event.deltaY) < 12 || reelScrollLockRef.current) {
+      return;
+    }
+    event.preventDefault();
+    reelScrollLockRef.current = true;
+    navigateReel(event.deltaY > 0 ? 1 : -1);
+    window.setTimeout(() => {
+      reelScrollLockRef.current = false;
+    }, 420);
+  }, [navigateReel]);
+
   useEffect(() => {
     if (activeSection !== "reels" || reels.length === 0) {
       setActiveReelId(null);
+      setOpenReelCommentsId(null);
       return;
     }
     setActiveReelId((current) => (
@@ -952,6 +1010,13 @@ const SocialFeed = () => {
         : reels[0].id
     ));
   }, [activeSection, reels]);
+
+  useEffect(() => {
+    if (!openReelCommentsId || String(openReelCommentsId) === String(activeReelId)) return;
+    setOpenReelCommentsId(null);
+    setReplyingToComment(null);
+    setReelReplyDraft("");
+  }, [activeReelId, openReelCommentsId]);
 
   useEffect(() => {
     if (activeSection !== "reels" || reels.length === 0) return undefined;
@@ -1139,7 +1204,7 @@ const SocialFeed = () => {
         </div>
 
         {activeSection === "reels" ? (
-          <section className="reels-page">
+          <section className="reels-page" onWheel={handleReelsWheel}>
             {reels.length === 0 ? (
               <div className="social-empty">No reels yet.</div>
             ) : (
@@ -1152,7 +1217,7 @@ const SocialFeed = () => {
                 const isReelMuted = Boolean(mutedReelIds[reel.id]);
                 return (
                   <article
-                    className={`reel-card ${comments[`reel-${reel.id}-open`] ? "comments-open" : ""}`}
+                    className={`reel-card ${String(openReelCommentsId) === String(reel.id) ? "comments-open" : ""}`}
                     data-reel-id={reel.id}
                     key={reel.id}
                     ref={(node) => {
@@ -1218,6 +1283,26 @@ const SocialFeed = () => {
                           <FaExpand />
                         </button>
                       </div>
+                      {isActiveReel && (
+                        <div className="reel-navigation" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => navigateReel(-1)}
+                            disabled={reels[0]?.id === reel.id}
+                            title="Previous reel"
+                          >
+                            <FaChevronUp />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigateReel(1)}
+                            disabled={reels[reels.length - 1]?.id === reel.id}
+                            title="Next reel"
+                          >
+                            <FaChevronDown />
+                          </button>
+                        </div>
+                      )}
                       <button
                         type="button"
                         className={`reel-play-toggle ${isReelPaused ? "visible" : ""}`}
@@ -1265,7 +1350,17 @@ const SocialFeed = () => {
                           {reel.is_liked ? <FaHeart /> : <FaRegHeart />}
                           <span>{reel.like_count || 0}</span>
                         </button>
-                        <button onClick={(event) => { event.stopPropagation(); setComments((prev) => ({ ...prev, [`reel-${reel.id}-open`]: !prev[`reel-${reel.id}-open`] })); }} title="Comment">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenReelCommentsId((current) => (
+                              String(current) === String(reel.id) ? null : reel.id
+                            ));
+                            setReplyingToComment(null);
+                            setReelReplyDraft("");
+                          }}
+                          title="Comment"
+                        >
                           <FaComment />
                           <span>{reel.comment_count || reelComments.length}</span>
                         </button>
@@ -1275,14 +1370,96 @@ const SocialFeed = () => {
                         </button>
                       </div>
                     </div>
-                    {comments[`reel-${reel.id}-open`] && (
+                    {String(openReelCommentsId) === String(reel.id) && (
                       <div className="reel-comments">
+                        <div className="reel-comments-header">
+                          <strong>Comments</strong>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenReelCommentsId(null);
+                              setReplyingToComment(null);
+                              setReelReplyDraft("");
+                            }}
+                            title="Close comments"
+                          >
+                            <FaTimes />
+                          </button>
+                        </div>
                         {reelComments.map((comment) => (
-                          <div className="comment-body" key={comment.id}>
-                            <strong>{comment.author?.username || comment.author || "User"}</strong>
-                            <span>{comment.content}</span>
+                          <div className="reel-comment-thread" key={comment.id}>
+                            <div className="reel-comment">
+                              <div className="comment-body">
+                                <strong>{comment.author?.username || comment.author || "User"}</strong>
+                                <span>{comment.content}</span>
+                              </div>
+                              <div className="reel-comment-actions">
+                                <button
+                                  className={comment.is_liked ? "active" : ""}
+                                  onClick={() => toggleReelCommentLike(comment.id)}
+                                >
+                                  {comment.is_liked ? <FaHeart /> : <FaRegHeart />}
+                                  {comment.like_count || 0}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setReplyingToComment({ reelId: reel.id, comment });
+                                    setReelReplyDraft("");
+                                  }}
+                                >
+                                  Reply
+                                </button>
+                              </div>
+                            </div>
+                            {(comment.replies || []).map((reply) => (
+                              <div className="reel-comment reply" key={reply.id}>
+                                <div className="comment-body">
+                                  <strong>{reply.author?.username || "User"}</strong>
+                                  <span>{reply.content}</span>
+                                </div>
+                                <div className="reel-comment-actions">
+                                  <button
+                                    className={reply.is_liked ? "active" : ""}
+                                    onClick={() => toggleReelCommentLike(reply.id)}
+                                  >
+                                    {reply.is_liked ? <FaHeart /> : <FaRegHeart />}
+                                    {reply.like_count || 0}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         ))}
+                        {replyingToComment && String(replyingToComment.reelId) === String(reel.id) && (
+                          <div className="reel-reply-box">
+                            <div>
+                              Replying to <strong>{replyingToComment.comment.author?.username || "User"}</strong>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingToComment(null);
+                                  setReelReplyDraft("");
+                                }}
+                              >
+                                <FaTimes />
+                              </button>
+                            </div>
+                            <div className="comment-input">
+                              <input
+                                autoFocus
+                                value={reelReplyDraft}
+                                onChange={(event) => setReelReplyDraft(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    addReelComment(reel.id, replyingToComment.comment.id);
+                                  }
+                                }}
+                                placeholder="Write a reply"
+                              />
+                              <button onClick={() => addReelComment(reel.id, replyingToComment.comment.id)}>Send</button>
+                            </div>
+                          </div>
+                        )}
                         <div className="comment-input">
                           <input
                             value={comments[`reel-${reel.id}`] || ""}
