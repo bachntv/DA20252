@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { FaArrowLeft, FaCamera, FaChevronLeft, FaChevronRight, FaGlobeAmericas, FaLock, FaPaperPlane, FaPhotoVideo, FaPlay, FaPlus, FaUserCheck, FaUserFriends, FaUserPlus } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import SocialPostCard from "../components/SocialPostCard";
 import { authFetch } from "../utils/authFetch";
+import { createTrackArtwork, getTrackArtwork } from "../utils/artwork";
 import "../styles/UserProfile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8001";
@@ -36,6 +38,7 @@ const UserProfile = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
+  const [profilePosts, setProfilePosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [postDraft, setPostDraft] = useState("");
@@ -56,9 +59,13 @@ const UserProfile = () => {
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`${API_BASE}/api/user/profile/${userId}`);
-      const data = await res.json();
-      setProfile(data);
+      const [profileRes, postsRes] = await Promise.all([
+        authFetch(`${API_BASE}/api/user/profile/${userId}`),
+        authFetch(`${API_BASE}/api/social/users/${userId}/posts`),
+      ]);
+      const [profileData, postsData] = await Promise.all([profileRes.json(), postsRes.json()]);
+      setProfile(profileData);
+      setProfilePosts(Array.isArray(postsData) ? postsData : []);
     } catch (err) {
       console.error("Failed to load profile", err);
     } finally {
@@ -194,6 +201,47 @@ const UserProfile = () => {
     } catch (err) {
       console.error("Failed to update follow state", err);
     }
+  };
+
+  const openPostAuthor = (author, event) => {
+    event?.stopPropagation();
+    if (author?.id) navigate(`/profile/${author.id}`);
+  };
+
+  const shareProfilePost = async (post) => {
+    const content = window.prompt("Add a message to this shared post:", "Shared a post");
+    if (content === null) return;
+
+    try {
+      await authFetch(`${API_BASE}/api/social/posts/${post.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      fetchProfile();
+    } catch (err) {
+      console.error("Failed to share profile post", err);
+    }
+  };
+
+  const renderPostTrack = (track) => {
+    if (!track) return null;
+    return (
+      <div className="social-track static-track">
+        <img
+          src={getTrackArtwork(track)}
+          alt={track.title}
+          onError={(event) => {
+            event.target.onerror = null;
+            event.target.src = createTrackArtwork(track);
+          }}
+        />
+        <div>
+          <p>{track.title}</p>
+          <span>{track.duration || "Song"}</span>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -456,19 +504,25 @@ const UserProfile = () => {
       {activeProfileTab === "posts" && (
         <section className="profile-posts">
           <h2>Recent posts</h2>
-          {profile.recent_posts.length === 0 ? (
+          {profilePosts.length === 0 ? (
             <p className="profile-empty">No posts yet.</p>
           ) : (
-            profile.recent_posts.map((post) => (
-              <article className="profile-post-card" key={post.id}>
-                <p>{post.content}</p>
-                {post.media_type === "video" && post.media_url ? (
-                  <video src={post.media_url} controls />
-                ) : (post.media_url || post.image_url) && (
-                  <img src={post.media_url || post.image_url} alt="Profile post" />
-                )}
-                <span>{new Date(post.created_at).toLocaleString()}</span>
-              </article>
+            profilePosts.map((post) => (
+              <SocialPostCard
+                key={post.id}
+                post={post}
+                onPostChange={(nextPost) => setProfilePosts((current) => current.map((item) => item.id === nextPost.id ? nextPost : item))}
+                onPostDelete={(postId) => {
+                  setProfilePosts((current) => current.filter((item) => item.id !== postId));
+                  setProfile((current) => current ? {
+                    ...current,
+                    stats: { ...current.stats, posts: Math.max(0, current.stats.posts - 1) },
+                  } : current);
+                }}
+                onOpenProfile={openPostAuthor}
+                onShare={shareProfilePost}
+                renderTrack={renderPostTrack}
+              />
             ))
           )}
         </section>

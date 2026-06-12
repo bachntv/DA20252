@@ -419,6 +419,39 @@ def get_feed(
     return [serialize_post(db, post, current_user.id) for post in posts]
 
 
+@router.get("/users/{user_id}/posts")
+def get_user_posts(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    friend_ids = {
+        row.friend_id
+        for row in db.query(SocialFriendship).filter(SocialFriendship.user_id == current_user.id).all()
+    }
+    posts = (
+        db.query(SocialPost)
+        .filter(SocialPost.user_id == user_id)
+        .order_by(SocialPost.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    visible_posts = [
+        post
+        for post in posts
+        if (
+            post.user_id == current_user.id
+            or post.audience == "public"
+            or (post.audience == "friends" and post.user_id in friend_ids)
+        )
+    ][:10]
+    return [serialize_post(db, post, current_user.id) for post in visible_posts]
+
+
 @router.post("/posts")
 def create_post(payload: PostCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_not_muted(current_user)
