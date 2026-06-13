@@ -27,6 +27,7 @@ import cloudinary
 import cloudinary.uploader
 import os
 import json
+from urllib.parse import unquote, urlparse
 from uuid import uuid4
 from dotenv import load_dotenv
 from utils.recommender_loader import recommender
@@ -93,6 +94,24 @@ async def save_artist_upload(file: UploadFile, request: Request, folder: str, al
         output.write(contents)
 
     return str(request.base_url).rstrip("/") + f"/uploads/{folder}/{file_name}"
+
+
+def delete_local_artist_upload(file_url: str | None):
+    if not file_url:
+        return
+
+    path = unquote(urlparse(file_url).path)
+    marker = "/uploads/"
+    if marker not in path:
+        return
+
+    relative_path = path.split(marker, 1)[1]
+    upload_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+    file_path = os.path.abspath(os.path.join(upload_root, relative_path))
+    if os.path.commonpath([upload_root, file_path]) != upload_root:
+        return
+    if os.path.isfile(file_path):
+        os.remove(file_path)
 
 
 def prune_listening_history(db: Session, user_id: str):
@@ -550,9 +569,6 @@ async def resubmit_artist_song(
     ).first()
     if not song:
         raise HTTPException(status_code=404, detail="Uploaded song not found")
-    if song.approval_status != "rejected":
-        raise HTTPException(status_code=400, detail="Only rejected songs can be edited and resubmitted")
-
     clean_title = title.strip()
     clean_artist = artist_name.strip()
     clean_album = album_name.strip() or "Singles"
@@ -585,7 +601,7 @@ async def resubmit_artist_song(
     song.is_active = False
     song.rejection_reason = None
 
-    log_activity(db, current_user.id, "artist_resubmit_song", "track", track_id, f"Resubmitted song: {clean_title}")
+    log_activity(db, current_user.id, "artist_resubmit_song", "track", track_id, f"Updated and resubmitted song: {clean_title}")
     for admin in get_users_with_role(db, "admin"):
         log_notification(
             db,
@@ -603,6 +619,50 @@ async def resubmit_artist_song(
     )
     db.commit()
     return {"id": track_id, "approval_status": "pending", "message": "Song updated and sent back for approval"}
+
+
+@router.delete("/artist/uploads/{track_id}")
+def delete_artist_song(
+    track_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_artist_user),
+):
+    song = db.query(Song).filter(
+        Song.track_id == track_id,
+        Song.uploaded_by_user_id == current_user.id,
+    ).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Uploaded song not found")
+
+    album_id = song.album_id
+    artist_id = song.artist_id
+    audio_url = song.audio_url
+    cover_url = song.track_image_url
+    title = song.track_name
+
+    db.execute(text("DELETE FROM playlist_tracks WHERE track_id = :track_id"), {"track_id": track_id})
+    db.execute(text("DELETE FROM listening_history WHERE track_id = :track_id"), {"track_id": track_id})
+    db.execute(text("DELETE FROM song_purchases WHERE track_id = :track_id"), {"track_id": track_id})
+    db.delete(song)
+    db.flush()
+
+    if album_id and not db.query(Song).filter(Song.album_id == album_id).first():
+        db.execute(text("DELETE FROM album_artists WHERE album_id = :album_id"), {"album_id": album_id})
+        db.query(Album).filter(Album.id == album_id).delete(synchronize_session=False)
+
+    if artist_id and not db.query(Song).filter(Song.artist_id == artist_id).first():
+        db.execute(text("DELETE FROM album_artists WHERE artist_id = :artist_id"), {"artist_id": artist_id})
+        db.query(Artist).filter(
+            Artist.id == artist_id,
+            Artist.owner_user_id == current_user.id,
+        ).delete(synchronize_session=False)
+
+    log_activity(db, current_user.id, "artist_delete_song", "track", track_id, f"Deleted uploaded song: {title}")
+    db.commit()
+
+    delete_local_artist_upload(audio_url)
+    delete_local_artist_upload(cover_url)
+    return {"id": track_id, "message": "Song deleted successfully"}
 
 
 @router.post("/artist/uploads/{track_id}/approval")
@@ -667,7 +727,7 @@ def get_admin_songs(
         SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
                s.track_genre, COALESCE(s.approval_status, 'approved') AS approval_status,
                s.is_active, s.track_image_url, s.audio_url, u.username AS uploaded_by,
-               s.rejection_reason
+               s.rejection_reason, s.lyrics
         FROM songs s
         JOIN artists at ON at.id = s.artist_id
         JOIN albums ab ON ab.id = s.album_id
@@ -692,6 +752,7 @@ def get_admin_songs(
             "audio_url": row[8],
             "uploaded_by": row[9],
             "rejection_reason": row[10],
+            "lyrics": row[11] or "",
             "source": "artist_upload" if row[8] else "catalog",
         }
         for row in rows

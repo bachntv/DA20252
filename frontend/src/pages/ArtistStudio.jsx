@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FaMusic, FaUpload } from "react-icons/fa";
+import { FaEdit, FaEye, FaMusic, FaTrash, FaUpload } from "react-icons/fa";
 import { authFetch } from "../utils/authFetch";
 import "../styles/MainContent/ArtistStudio.css";
 
@@ -33,6 +33,8 @@ const ArtistStudio = () => {
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
+  const [expandedTrackId, setExpandedTrackId] = useState(null);
+  const [deletingTrackId, setDeletingTrackId] = useState(null);
 
   const fetchUploads = async () => {
     try {
@@ -131,6 +133,37 @@ const ArtistStudio = () => {
     setStatus("");
   };
 
+  const deleteUpload = async (item) => {
+    const confirmed = window.confirm(
+      `Delete "${item.title}" permanently? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingTrackId(item.id);
+    setStatus("");
+    try {
+      const res = await authFetch(`${API_BASE}/api/music/artist/uploads/${item.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not delete this song.");
+
+      if (editingTrack?.id === item.id) {
+        setEditingTrack(null);
+        setFormData({ title: "", artistName: "", albumName: "Singles", genre: "independent", lyrics: "" });
+        setAudioFile(null);
+        setCoverImage(null);
+      }
+      setExpandedTrackId((current) => (current === item.id ? null : current));
+      setStatus(data.message || "Song deleted successfully.");
+      await Promise.all([fetchUploads(), fetchStats()]);
+    } catch (err) {
+      setStatus(err.message || "Could not delete this song.");
+    } finally {
+      setDeletingTrackId(null);
+    }
+  };
+
   return (
     <div className="artist-studio">
       <section className="artist-studio-header">
@@ -152,7 +185,7 @@ const ArtistStudio = () => {
 
       <section className="artist-upload-panel">
         <div className="artist-panel-heading">
-          <h2>{editingTrack ? "Edit Rejected Song" : "Upload Song"}</h2>
+          <h2>{editingTrack ? "Edit & Resubmit Song" : "Upload Song"}</h2>
           {editingTrack && <button type="button" onClick={cancelEdit}>Cancel</button>}
         </div>
         <form onSubmit={submitUpload} className="artist-upload-form">
@@ -185,7 +218,7 @@ const ArtistStudio = () => {
           ) : (
             uploads.map((item) => (
               <div className="artist-upload-row" key={item.id}>
-                <div>
+                <div className="artist-upload-summary">
                   <strong>{item.title}</strong>
                   <span>{item.artist} - {item.album}</span>
                   <small>{item.play_count || 0} plays - {item.purchase_count || 0} downloads sold</small>
@@ -195,10 +228,52 @@ const ArtistStudio = () => {
                   <span className={`upload-status upload-status--${item.approval_status}`}>
                     {STATUS_LABELS[item.approval_status] || "Pending review"}
                   </span>
-                  {item.approval_status === "rejected" && (
-                    <button type="button" onClick={() => beginEdit(item)}>Edit & Resubmit</button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTrackId((current) => (current === item.id ? null : item.id))
+                    }
+                  >
+                    <FaEye />
+                    {expandedTrackId === item.id ? "Hide Details" : "View Details"}
+                  </button>
+                  <button type="button" onClick={() => beginEdit(item)}>
+                    <FaEdit />
+                    Edit & Resubmit
+                  </button>
+                  <button
+                    type="button"
+                    className="artist-delete-button"
+                    disabled={deletingTrackId === item.id}
+                    onClick={() => deleteUpload(item)}
+                  >
+                    <FaTrash />
+                    {deletingTrackId === item.id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
+                {expandedTrackId === item.id && (
+                  <div className="artist-track-details">
+                    <div className="artist-track-facts">
+                      <span><strong>Genre:</strong> {item.genre || "Unknown"}</span>
+                      <span><strong>Plays:</strong> {item.play_count || 0}</span>
+                      <span><strong>Downloads:</strong> {item.purchase_count || 0}</span>
+                    </div>
+                    <section>
+                      <h3>Audio</h3>
+                      {item.audio_url ? (
+                        <audio controls preload="metadata" src={item.audio_url}>
+                          Your browser does not support audio playback.
+                        </audio>
+                      ) : (
+                        <p>No audio file is available.</p>
+                      )}
+                    </section>
+                    <section>
+                      <h3>Lyrics</h3>
+                      <pre>{item.lyrics?.trim() || "No lyrics were submitted."}</pre>
+                    </section>
+                  </div>
+                )}
               </div>
             ))
           )}

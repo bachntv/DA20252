@@ -169,16 +169,56 @@
 
 .admin-song-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.admin-song-empty {
+.admin-song-preview {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 16px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(280px, 1.2fr);
+  padding: 16px;
+}
+
+.admin-song-preview h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.admin-song-preview audio {
+  max-width: 100%;
+  width: 100%;
+}
+
+.admin-song-preview p,
+.admin-song-preview pre {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.admin-song-preview pre {
+  font: inherit;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.admin-song-empty,
+.admin-song-error {
   background: var(--glass-bg);
   border: var(--glass-border);
   border-radius: var(--radius-lg);
   color: var(--text-secondary);
   padding: 24px;
   text-align: center;
+}
+
+.admin-song-error {
+  color: #ffb4a8;
 }
 
 @media (max-width: 760px) {
@@ -195,5 +235,9 @@
   .admin-song-state,
   .admin-song-actions {
     grid-column: 2;
+  }
+
+  .admin-song-preview {
+    grid-template-columns: 1fr;
   }
 }

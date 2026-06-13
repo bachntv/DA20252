@@ -168,7 +168,9 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  display: flex;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: space-between;
   padding: 12px;
 }
@@ -200,6 +202,66 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.artist-upload-actions button {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.artist-upload-actions .artist-delete-button {
+  color: #ffb4a8;
+}
+
+.artist-upload-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.artist-track-details {
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(280px, 1.2fr);
+  padding: 14px;
+}
+
+.artist-track-details h3 {
+  font-size: 14px;
+  margin: 0 0 9px;
+}
+
+.artist-track-details audio {
+  max-width: 100%;
+  width: 100%;
+}
+
+.artist-track-details pre {
+  color: var(--text-secondary);
+  font: inherit;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.artist-track-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  grid-column: 1 / -1;
+}
+
+.artist-track-facts span {
+  margin: 0;
+}
+
+.artist-track-facts strong {
+  display: inline;
 }
 
 .upload-status {
@@ -240,10 +302,14 @@
 
   .artist-upload-row {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .artist-upload-actions {
     align-items: flex-start;
+  }
+
+  .artist-track-details {
+    grid-template-columns: 1fr;
   }
 }

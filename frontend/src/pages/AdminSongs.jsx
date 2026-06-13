@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FaArrowLeft, FaCheck, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaBookOpen, FaCheck, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/authFetch";
 import "../styles/MainContent/AdminSongs.css";
@@ -18,6 +18,8 @@ const AdminSongs = () => {
   const [songs, setSongs] = useState([]);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [loading, setLoading] = useState(false);
+  const [expandedSongId, setExpandedSongId] = useState(null);
+  const [error, setError] = useState("");
 
   const fetchSongs = async () => {
     setLoading(true);
@@ -44,12 +46,19 @@ const AdminSongs = () => {
       if (!rejectionReason.trim()) return;
     }
 
-    await authFetch(`${API_BASE}/api/music/artist/uploads/${trackId}/approval`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejection_reason: rejectionReason }),
-    });
-    fetchSongs();
+    setError("");
+    try {
+      const response = await authFetch(`${API_BASE}/api/music/artist/uploads/${trackId}/approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, rejection_reason: rejectionReason }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Could not review this song.");
+      await fetchSongs();
+    } catch (err) {
+      setError(err.message || "Could not review this song.");
+    }
   };
 
   const pendingCount = songs.filter((song) => song.approval_status === "pending").length;
@@ -87,6 +96,7 @@ const AdminSongs = () => {
       </section>
 
       <section className="admin-song-list">
+        {error && <div className="admin-song-error">{error}</div>}
         {loading ? (
           <div className="admin-song-empty">Loading songs...</div>
         ) : songs.length === 0 ? (
@@ -110,6 +120,16 @@ const AdminSongs = () => {
                 {song.rejection_reason && <small className="admin-song-reason">{song.rejection_reason}</small>}
               </div>
               <div className="admin-song-actions">
+                <button
+                  type="button"
+                  className="admin-song-preview-button"
+                  onClick={() =>
+                    setExpandedSongId((current) => (current === song.id ? null : song.id))
+                  }
+                >
+                  <FaBookOpen />
+                  {expandedSongId === song.id ? "Hide" : "Preview"}
+                </button>
                 <button type="button" onClick={() => reviewSong(song.id, "approved")} title="Approve song">
                   <FaCheck />
                   Approve
@@ -119,6 +139,24 @@ const AdminSongs = () => {
                   Reject
                 </button>
               </div>
+              {expandedSongId === song.id && (
+                <div className="admin-song-preview">
+                  <section>
+                    <h3>Audio preview</h3>
+                    {song.audio_url ? (
+                      <audio controls preload="metadata" src={song.audio_url}>
+                        Your browser does not support audio playback.
+                      </audio>
+                    ) : (
+                      <p>No audio file was submitted.</p>
+                    )}
+                  </section>
+                  <section>
+                    <h3>Lyrics</h3>
+                    <pre>{song.lyrics?.trim() || "No lyrics were submitted."}</pre>
+                  </section>
+                </div>
+              )}
             </article>
           ))
         )}
