@@ -14,6 +14,7 @@ const STATUS_LABELS = {
 };
 
 const AdminSongs = () => {
+  // State luu danh sach bai, bo loc va bai dang duoc mo xem truoc.
   const navigate = useNavigate();
   const [songs, setSongs] = useState([]);
   const [statusFilter, setStatusFilter] = useState("pending");
@@ -22,6 +23,7 @@ const AdminSongs = () => {
   const [error, setError] = useState("");
 
   const fetchSongs = async () => {
+    // GET danh sach bai theo trang thai admin dang chon.
     setLoading(true);
     try {
       const res = await authFetch(`${API_BASE}/api/music/admin/songs?status=${statusFilter}`);
@@ -36,10 +38,12 @@ const AdminSongs = () => {
   };
 
   useEffect(() => {
+    // Moi khi doi bo loc, tai lai danh sach tu backend.
     fetchSongs();
   }, [statusFilter]);
 
   const reviewSong = async (trackId, status) => {
+    // Khi tu choi, admin bat buoc nhap ly do de artist biet can sua gi.
     let rejectionReason = "";
     if (status === "rejected") {
       rejectionReason = window.prompt("Tell the artist what needs to change before resubmitting.") || "";
@@ -48,6 +52,7 @@ const AdminSongs = () => {
 
     setError("");
     try {
+      // POST ket qua duyet; backend se cap nhat approval_status va is_active.
       const response = await authFetch(`${API_BASE}/api/music/artist/uploads/${trackId}/approval`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

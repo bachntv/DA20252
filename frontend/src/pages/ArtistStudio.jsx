@@ -12,6 +12,7 @@ const STATUS_LABELS = {
 };
 
 const ArtistStudio = () => {
+  // State luu danh sach bai, thong ke, du lieu form va trang thai giao dien.
   const [uploads, setUploads] = useState([]);
   const [stats, setStats] = useState({
     uploaded_songs: 0,
@@ -37,6 +38,7 @@ const ArtistStudio = () => {
   const [deletingTrackId, setDeletingTrackId] = useState(null);
 
   const fetchUploads = async () => {
+    // GET: lay cac bai do artist hien tai tai len.
     try {
       const res = await authFetch(`${API_BASE}/api/music/artist/uploads`);
       const data = await res.json();
@@ -47,6 +49,7 @@ const ArtistStudio = () => {
   };
 
   const fetchStats = async () => {
+    // GET: lay tong so bai pending/approved/rejected, luot nghe va luot mua.
     try {
       const res = await authFetch(`${API_BASE}/api/music/artist/stats`);
       const data = await res.json();
@@ -57,6 +60,7 @@ const ArtistStudio = () => {
   };
 
   useEffect(() => {
+    // Chay mot lan khi mo Artist Studio.
     fetchUploads();
     fetchStats();
   }, []);
@@ -73,6 +77,7 @@ const ArtistStudio = () => {
       return;
     }
 
+    // Gom chu, lyrics va file thanh multipart FormData de gui len backend.
     const payload = new FormData();
     payload.append("title", formData.title);
     payload.append("artist_name", formData.artistName);
@@ -85,6 +90,7 @@ const ArtistStudio = () => {
     setIsSubmitting(true);
     setStatus("");
     try {
+      // Co editingTrack thi PUT de sua; khong co thi POST de tao bai moi.
       const res = await authFetch(
         editingTrack
           ? `${API_BASE}/api/music/artist/uploads/${editingTrack.id}`
@@ -112,6 +118,7 @@ const ArtistStudio = () => {
   };
 
   const beginEdit = (item) => {
+    // Dua thong tin bai dang chon len form de artist sua.
     setEditingTrack(item);
     setFormData({
       title: item.title || "",
@@ -134,6 +141,7 @@ const ArtistStudio = () => {
   };
 
   const deleteUpload = async (item) => {
+    // Hoi xac nhan vi thao tac DELETE khong the khoi phuc.
     const confirmed = window.confirm(
       `Delete "${item.title}" permanently? This action cannot be undone.`
     );
@@ -142,6 +150,7 @@ const ArtistStudio = () => {
     setDeletingTrackId(item.id);
     setStatus("");
     try {
+      // Backend tu kiem tra bai nay co thuoc artist dang dang nhap hay khong.
       const res = await authFetch(`${API_BASE}/api/music/artist/uploads/${item.id}`, {
         method: "DELETE",
       });

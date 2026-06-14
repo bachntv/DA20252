@@ -371,6 +371,7 @@ def get_artist_uploads(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_artist_user),
 ):
+    # Lay cac bai do chinh artist dang nhap tai len, kem luot nghe va luot mua.
     rows = db.execute(text("""
         SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
                s.track_genre, s.approval_status, s.is_active, s.track_image_url, s.audio_url,
@@ -414,6 +415,7 @@ def get_artist_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_artist_user),
 ):
+    # Dem so bai theo tung trang thai de hien thi cac o thong ke trong Studio.
     row = db.execute(text("""
         SELECT
           COUNT(DISTINCT s.track_id) AS uploaded_songs,
@@ -451,6 +453,7 @@ async def upload_artist_song(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_artist_user),
 ):
+    # Lam sach du lieu chuoi truoc khi kiem tra va luu.
     clean_title = title.strip()
     clean_artist = artist_name.strip()
     clean_album = album_name.strip() or "Singles"
@@ -458,11 +461,13 @@ async def upload_artist_song(
     if not clean_title or not clean_artist:
         raise HTTPException(status_code=400, detail="Title and artist name are required")
 
+    # Luu file am thanh va anh bia, sau do nhan lai URL de luu vao database.
     audio_url = await save_artist_upload(audio_file, request, "artist_songs", ARTIST_AUDIO_TYPES, MAX_ARTIST_AUDIO_BYTES)
     cover_url = None
     if cover_image and cover_image.filename:
         cover_url = await save_artist_upload(cover_image, request, "artist_covers", ARTIST_IMAGE_TYPES, MAX_ARTIST_IMAGE_BYTES)
 
+    # Tim ho so nghe si cua nguoi dung; neu chua co thi tao moi.
     artist = db.query(Artist).filter(
         Artist.owner_user_id == current_user.id,
         Artist.name == clean_artist,
@@ -480,6 +485,7 @@ async def upload_artist_song(
     elif cover_url and not artist.image_url:
         artist.image_url = cover_url
 
+    # Moi lan tai bai len tao mot album/single va mot ma bai hat rieng.
     album = Album(
         id=f"album_{uuid4().hex}",
         name=clean_album,
@@ -489,6 +495,7 @@ async def upload_artist_song(
         is_active=True,
     )
     track_id = f"artist_track_{uuid4().hex}"
+    # Bai moi chua duoc cong khai: pending + is_active=False cho den khi admin duyet.
     song = Song(
         track_id=track_id,
         track_name=clean_title,
@@ -518,9 +525,11 @@ async def upload_artist_song(
         uploaded_by_user_id=current_user.id,
         rejection_reason=None,
     )
+    # Luu album, quan he album-nghe si va bai hat trong cung phien database.
     db.add(album)
     db.add(AlbumArtist(album_id=album.id, artist_id=artist.id))
     db.add(song)
+    # Bao cho admin biet co bai moi can duyet, dong thoi xac nhan cho artist.
     log_activity(db, current_user.id, "artist_upload_song", "track", track_id, f"Uploaded pending song: {clean_title}")
     for admin in get_users_with_role(db, "admin"):
         log_notification(
@@ -563,6 +572,7 @@ async def resubmit_artist_song(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_artist_user),
 ):
+    # Chi cho artist sua bai do chinh tai khoan cua minh tai len.
     song = db.query(Song).filter(
         Song.track_id == track_id,
         Song.uploaded_by_user_id == current_user.id,
@@ -576,6 +586,7 @@ async def resubmit_artist_song(
     if not clean_title or not clean_artist:
         raise HTTPException(status_code=400, detail="Title and artist name are required")
 
+    # Cap nhat ten nghe si va album dang gan voi bai hat.
     artist = db.query(Artist).filter(Artist.id == song.artist_id).first()
     album = db.query(Album).filter(Album.id == song.album_id).first()
     if artist:
@@ -583,6 +594,7 @@ async def resubmit_artist_song(
     if album:
         album.name = clean_album
 
+    # File moi la tuy chon; neu khong chon thi giu nguyen file cu.
     cover_url = None
     if cover_image and cover_image.filename:
         cover_url = await save_artist_upload(cover_image, request, "artist_covers", ARTIST_IMAGE_TYPES, MAX_ARTIST_IMAGE_BYTES)
@@ -594,6 +606,7 @@ async def resubmit_artist_song(
     if audio_file and audio_file.filename:
         song.audio_url = await save_artist_upload(audio_file, request, "artist_songs", ARTIST_AUDIO_TYPES, MAX_ARTIST_AUDIO_BYTES)
 
+    # Moi lan sua, bai bi an va quay lai pending de admin kiem tra lai.
     song.track_name = clean_title
     song.track_genre = clean_genre
     song.lyrics = lyrics
@@ -627,6 +640,7 @@ def delete_artist_song(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_artist_user),
 ):
+    # Dieu kien user_id ngan artist xoa bai cua nguoi khac.
     song = db.query(Song).filter(
         Song.track_id == track_id,
         Song.uploaded_by_user_id == current_user.id,
@@ -640,12 +654,14 @@ def delete_artist_song(
     cover_url = song.track_image_url
     title = song.track_name
 
+    # Xoa cac ban ghi tham chieu den bai truoc khi xoa bai chinh.
     db.execute(text("DELETE FROM playlist_tracks WHERE track_id = :track_id"), {"track_id": track_id})
     db.execute(text("DELETE FROM listening_history WHERE track_id = :track_id"), {"track_id": track_id})
     db.execute(text("DELETE FROM song_purchases WHERE track_id = :track_id"), {"track_id": track_id})
     db.delete(song)
     db.flush()
 
+    # Neu album/nghe si khong con bai nao thi don cac ban ghi khong con su dung.
     if album_id and not db.query(Song).filter(Song.album_id == album_id).first():
         db.execute(text("DELETE FROM album_artists WHERE album_id = :album_id"), {"album_id": album_id})
         db.query(Album).filter(Album.id == album_id).delete(synchronize_session=False)
@@ -657,6 +673,7 @@ def delete_artist_song(
             Artist.owner_user_id == current_user.id,
         ).delete(synchronize_session=False)
 
+    # Commit database truoc, sau do moi xoa file local cua bai va anh bia.
     log_activity(db, current_user.id, "artist_delete_song", "track", track_id, f"Deleted uploaded song: {title}")
     db.commit()
 
@@ -673,6 +690,7 @@ def update_artist_upload_approval(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
+    # Dependency get_current_admin_user dam bao chi admin vao duoc API nay.
     if status not in {"approved", "rejected", "pending"}:
         raise HTTPException(status_code=400, detail="Status must be approved, rejected, or pending")
 
@@ -680,6 +698,7 @@ def update_artist_upload_approval(
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
 
+    # Chi bai approved moi duoc hien cho nguoi nghe.
     song.approval_status = status
     song.is_active = status == "approved"
     clean_reason = rejection_reason.strip() if rejection_reason else ""
@@ -688,6 +707,7 @@ def update_artist_upload_approval(
     if status == "rejected" and clean_reason:
         log_details = f"{log_details}: {clean_reason}"
     log_activity(db, current_user.id, f"artist_upload_{status}", "track", track_id, log_details)
+    # Gui ket qua duyet va ly do tu choi ve cho artist da dang bai.
     if song.uploaded_by_user_id:
         status_label = {
             "approved": "approved and published",
@@ -717,12 +737,14 @@ def get_admin_songs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user),
 ):
+    # Neu admin chon bo loc, them dieu kien WHERE vao cau SQL.
     params = {}
     where_clause = ""
     if status != "all":
         where_clause = "WHERE s.approval_status = :status"
         params["status"] = status
 
+    # Lay thong tin bai, nguoi dang, audio va lyrics de admin xem truoc khi duyet.
     rows = db.execute(text(f"""
         SELECT s.track_id, s.track_name, at.name AS artist_name, ab.name AS album_name,
                s.track_genre, COALESCE(s.approval_status, 'approved') AS approval_status,
